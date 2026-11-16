@@ -1,0 +1,262 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Layout modes
+
+   overlay  A large landscape screen. The video fills the stage and the HUDs
+            and panels float over it, exactly as in the Figma frame. Anything
+            smaller stacks the same panels underneath the video instead.
+   short    Laptop-height screens: panels tighten so nothing collides.
+   tall     Full-height screens: room for the Figma's exact vertical offsets.
+--------------------------------------------------------------------------- */
+@custom-variant overlay {
+  @media (min-width: 80rem) and (min-height: 41.25rem) {
+    @slot;
+  }
+}
+
+@custom-variant short {
+  @media (max-height: 51.25rem) {
+    @slot;
+  }
+}
+
+@custom-variant tall {
+  @media (min-height: 56.25rem) {
+    @slot;
+  }
+}
+
+/* The shortest screens that still use the overlay layout: drop what is not
+   essential so the metrics panel never reaches the HUD below it. */
+@custom-variant squat {
+  @media (max-height: 45rem) {
+    @slot;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Design tokens, sampled from the Figma file "MMA Vision · Single dashboard".
+--------------------------------------------------------------------------- */
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Surfaces */
+  --color-ink: #05080d;
+  --color-bar: #0a0e14;
+  --color-hud: #08101b;
+  --color-panel: #101824;
+  --color-panel-soft: #121c2a;
+  --color-panel-raised: #131b28;
+  --color-control: #253349;
+  --color-control-hover: #2f4263;
+  --color-line: #2a374b;
+  --color-line-strong: #42516a;
+
+  /* Text */
+  --color-fg: #f5f7fb;
+  --color-fg-soft: #d1dbe9;
+  --color-muted: #a6b2c3;
+
+  /* Fighter corners: the only saturated colours in the interface */
+  --color-corner-blue: #56a0ff;
+  --color-corner-blue-surface: #101f33;
+  --color-corner-blue-line: #284b78;
+  --color-corner-red: #ff6575;
+  --color-corner-red-surface: #291a26;
+  --color-corner-red-line: #643442;
+
+  /* Status */
+  --color-ok: #73dfc0;
+  --color-sage: #c6dab1;
+  --color-warn: #e0b783;
+  --color-warn-surface: #282219;
+  --color-ended: #c9b8e8;
+  --color-brand: #4f8ff7;
+}
+
+/* Small tracked capitals used for panel and field labels throughout the Figma. */
+@utility caps-label {
+  font-size: 9px;
+  line-height: 11px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+@utility caps-heading {
+  font-size: 9px;
+  line-height: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* A value with nothing behind it yet: shown as a dash, visibly quieter than data. */
+@utility unmeasured {
+  color: color-mix(in srgb, var(--color-muted) 55%, transparent);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-corner-blue);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* -------------------------------------------------------------------------
+     Live Monitoring layout. One set of panels, placed by named grid areas.
+     Stacked (default): everything flows under the video and the page scrolls.
+  ------------------------------------------------------------------------- */
+  .live-grid {
+    display: grid;
+    isolation: isolate;
+    gap: 12px;
+    padding: 12px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'chip chip'
+      'stage stage'
+      'notice notice'
+      'blue red'
+      'events events'
+      'metrics metrics';
+  }
+
+  .area-stage {
+    grid-area: stage;
+  }
+  .area-chip {
+    grid-area: chip;
+  }
+  .area-notice {
+    grid-area: notice;
+  }
+  .area-metrics {
+    grid-area: metrics;
+  }
+  .area-blue {
+    grid-area: blue;
+  }
+  .area-red {
+    grid-area: red;
+  }
+  .area-events {
+    grid-area: events;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Overlay: the stage is taken out of the grid and stretched behind it; the
+     panels sit in two rows on top (top strip and bottom HUD row). */
+  @media (min-width: 80rem) and (min-height: 41.25rem) {
+    .live-grid {
+      --hud-width: clamp(300px, 25vw, 360px);
+      height: 100%;
+      padding: 16px 24px 24px;
+      gap: 16px 24px;
+      grid-template-columns: var(--hud-width) minmax(0, 1fr) var(--hud-width);
+      grid-template-rows: minmax(0, 1fr) auto;
+      grid-template-areas:
+        'chip notice metrics'
+        'blue events red';
+    }
+
+    /* Without this, an absolutely positioned grid child is placed relative to
+       its named grid area instead of the whole grid. */
+    .live-grid > .area-stage {
+      grid-area: auto;
+    }
+
+    .area-chip,
+    .area-notice,
+    .area-metrics {
+      align-self: start;
+    }
+
+    .area-metrics {
+      justify-self: end;
+      width: 264px;
+    }
+
+    .area-blue,
+    .area-red,
+    .area-events {
+      align-self: end;
+    }
+  }
+
+  /* Empty stage backdrop: arena light from above and a faint cage mesh. */
+  .stage-backdrop {
+    background:
+      radial-gradient(90% 70% at 50% 0%, rgb(86 160 255 / 0.11), transparent 62%),
+      repeating-linear-gradient(45deg, rgb(245 247 251 / 0.03) 0 1px, transparent 1px 22px),
+      repeating-linear-gradient(-45deg, rgb(245 247 251 / 0.03) 0 1px, transparent 1px 22px),
+      linear-gradient(#0b1220, #05080d);
+  }
+
+  /* Thin timeline under the top bar for a recorded source. */
+  .scrub {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 14px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .scrub::-webkit-slider-runnable-track {
+    height: 3px;
+    background: linear-gradient(
+      to right,
+      var(--color-fg-soft) var(--progress, 0%),
+      var(--color-line-strong) var(--progress, 0%)
+    );
+  }
+  .scrub::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 11px;
+    height: 11px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: var(--color-fg);
+  }
+  .scrub::-moz-range-track {
+    height: 3px;
+    background: var(--color-line-strong);
+  }
+  .scrub::-moz-range-progress {
+    height: 3px;
+    background: var(--color-fg-soft);
+  }
+  .scrub::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--color-fg);
+  }
+}
