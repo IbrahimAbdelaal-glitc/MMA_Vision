@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Generated analysis outputs and uploaded videos.
+# They stay on disk; they are just not version-controlled.
+jobs/
+results/
+videos/
+
+# Frontend
+node_modules/
+dist/
+*.local
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
