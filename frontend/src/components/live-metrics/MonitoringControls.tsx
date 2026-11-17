@@ -173,13 +173,17 @@ function EngineStatus({
   return (
     <dl
       aria-label="Live engine status"
-      className="mt-2 space-y-1 border-t border-line-strong/50 px-0.5 pt-2 text-[10px] leading-3 squat:hidden"
+      // Short screens keep the engine (device, inference), the analysed rate and the
+      // detection state: they say whether events can be detected, and why not. In
+      // the overlay layout the panel would then reach the HUDs below it, so there
+      // the status bar carries the same line instead (engineStatusLine).
+      className="mt-2 space-y-1 border-t border-line-strong/50 px-0.5 pt-2 text-[10px] leading-3 squat:mt-1 squat:pt-1 overlay:squat:hidden"
     >
       <Row label="Engine">
         {CONNECTION_TEXT[connection]}
         {where}
       </Row>
-      <Row label="Frames analysed">
+      <Row label="Frames analysed" squatHidden>
         {stats ? `${stats.framesAnalysed} · ${stats.framesSkipped} skipped` : '—'}
       </Row>
       <Row label="Analysed rate">
@@ -189,15 +193,26 @@ function EngineStatus({
         {detection}
       </Row>
       {stats && stats.unscoredEventCount > 0 && (
-        <Row label="Unscored (warm-up)">{String(stats.unscoredEventCount)}</Row>
+        <Row label="Unscored (warm-up)" squatHidden>{String(stats.unscoredEventCount)}</Row>
       )}
     </dl>
   )
 }
 
-function Row({ label, warn = false, children }: { label: string; warn?: boolean; children: ReactNode }) {
+function Row({
+  label,
+  warn = false,
+  squatHidden = false,
+  children,
+}: {
+  label: string
+  warn?: boolean
+  /** Dropped on short screens, where the panel must not reach the HUD below. */
+  squatHidden?: boolean
+  children: ReactNode
+}) {
   return (
-    <div className="flex justify-between gap-3">
+    <div className={cx('flex justify-between gap-3', squatHidden && 'squat:hidden')}>
       <dt className="shrink-0 text-muted">{label}</dt>
       <dd className={cx('text-right font-semibold tabular-nums', warn ? 'text-warn' : 'text-fg-soft')}>
         {children}

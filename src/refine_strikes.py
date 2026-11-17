@@ -32,6 +32,14 @@ MIN_ANGLE_GAIN = -5.0
 MIN_CONFIDENCE = 0.85
 MIN_EVENT_GAP = 0.35
 
+# One kick moves both ankles: the kicking leg and the pivoting standing leg.
+# A fighter cannot kick with both legs within MIN_EVENT_GAP, so kick-like
+# candidates of one fighter on opposite legs that close together are one
+# movement and only the stronger is kept (docs/validation.md, "One kick,
+# several events"). Punches are not merged: a 1-2 is two strikes. Mirrored by
+# live/constants.py CROSS_LEG_KICK_DUPLICATES.
+CROSS_LEG_KICK_DUPLICATES = True
+
 # ==============================
 # LOAD DATA
 # ==============================
@@ -161,9 +169,14 @@ for idx, row in df.iterrows():
 
     if not group.empty:
 
+        if CROSS_LEG_KICK_DUPLICATES and row["event_type"] == "kick-like":
+            same_limb = pd.Series(True, index=group.index)   # either leg
+        else:
+            same_limb = group["limb"] == row["limb"]
+
         same_group = group[
             (group["fighter"] == row["fighter"]) &
-            (group["limb"] == row["limb"]) &
+            same_limb &
             (group["event_type"] == row["event_type"])
         ]
 
