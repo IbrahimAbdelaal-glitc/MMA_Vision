@@ -85,10 +85,13 @@ export interface IdentityEntry {
   reason: string | null
 }
 
+/** Which network-forward path the engine runs (design 2026-11-17-live-cuda-graph). */
+export type InferencePath = 'cuda_graph' | 'eager'
+
 export type EndReason = 'video_end' | 'stopped' | 'disconnected' | 'crashed'
 
 export type EngineMessage =
-  | { type: 'ready'; device: string | null; model: string | null }
+  | { type: 'ready'; device: string | null; model: string | null; inference: InferencePath | null }
   | { type: 'frame'; frame: LiveFrame }
   | { type: 'event'; event: Omit<LiveEvent, 'id'> }
   | { type: 'identity'; entry: IdentityEntry }

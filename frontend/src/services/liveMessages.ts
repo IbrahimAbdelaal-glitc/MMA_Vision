@@ -117,7 +117,12 @@ export function normalizeEngineMessage(raw: unknown): EngineMessage | null {
   if (!isRecord(raw)) return null
   switch (raw.type) {
     case 'ready':
-      return { type: 'ready', device: text(raw.device), model: text(raw.model) }
+      return {
+        type: 'ready',
+        device: text(raw.device),
+        model: text(raw.model),
+        inference: raw.inference === 'cuda_graph' || raw.inference === 'eager' ? raw.inference : null,
+      }
     case 'frame': {
       const t = num(raw.t)
       const frameIndex = int(raw.frame_index)

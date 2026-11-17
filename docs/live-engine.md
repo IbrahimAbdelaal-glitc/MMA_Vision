@@ -243,6 +243,60 @@ Swaps, linked to the logged swap; the scorecard itself is not relabelled.
 A second session at 1x showed the hidden-overlay note while playing, the
 exact overlay on Pause, and Discard removed the session folder.
 
+## CUDA Graph inference (2026-11-17)
+
+Design: `docs/superpowers/specs/2026-11-17-live-cuda-graph-design.md`.
+The network forward (only that: ultralytics' preprocessing, NMS, keypoint
+scaling and ByteTrack are unchanged; fp32, `imgsz` 640) is captured as a
+CUDA Graph during the warm-up before `ready` and replayed for every frame
+(`live/cuda_graph.py`, hooked in `YoloModel.warm_up`). On CPU, or if
+capture fails, the engine runs the standard forward; the reason goes to
+`engine.log`. `ready.inference` is `"cuda_graph"` or `"eager"` and the
+dashboard's engine row shows "CUDA graph" or "standard inference".
+
+Parity: the graphed and standard models gave **identical** tracker IDs,
+boxes and keypoints on every frame of both real clips
+(`test_graphed_model_matches_eager_on_every_frame_of_the_real_clips`).
+A capture that fails midway leaves PyTorch on the capture stream with a
+pending CUDA error; `_recover()` restores the stream and consumes the
+error so the engine can continue eager (tested).
+If a frame ever letterboxes to another shape than the captured one, the
+graph is retired for good and the engine reports `eager` (logged as "CUDA
+graph retired"): an eager forward at another shape makes the pose head
+reallocate its cached anchors, which the graph points at, so replaying
+later would silently read freed memory (found in review, reproduced and
+tested).
+
+Measured on the 6 s clip, AC power:
+
+| | Before (eager) | With CUDA graph |
+|---|---|---|
+| Raw network forward (median) | 45-126 ms | 2.3 ms |
+| One `YoloModel` call (median / p90) | 89.7 / 193 ms | 72.0 / 83.7 ms |
+| `live.realcheck` 1x analysed rate | 4.5 /s | 9.2 /s (55 analysed, 305 skipped) |
+| Browser 1x analysed rate (stats each second) | not measured | 10.0-12.9 /s |
+| Event detection at 1x | inactive | realcheck: active only at the last tick; browser: active throughout |
+| Events at 1x | 0 | 0 (both runs) |
+| 0.1x | 60 /s, 24 events | 59.5 /s, 24 events, 19 matched offline, identity agree |
+| GPU memory peak / after exit | 171 / 0 MiB | 275 / 0 MiB (hand-off: 0 MiB) |
+
+Where a graphed frame's 72 ms goes now: ultralytics preprocess 10.6 ms
+(CPU letterbox, upload), inference 16.6 ms (copy in, replay, output
+copies), postprocess 25.9 ms (NMS, keypoint scaling), about 19 ms
+ByteTrack, `.cpu()` transfers and list building. These are outside the
+approved design (network forward only).
+
+**Why 1x still finds no events, even with detection reported active.**
+Limb speed is computed only between samples at most 3 frames (0.05 s)
+apart (`LIMB_SPEED_MAX_GAP_FRAMES`, carried from offline
+`analyze_strikes.py:198`). At 10-13 analysed frames per second of a 60 fps
+video, analysed frames are about 5-6 frames apart, so every speed is null
+and no peak can form. Detection can only emit events at roughly 20 or more
+analysed frames per second, but the status turns "Active" at 10
+(`MIN_ANALYSED_RATE`). This mismatch predates the CUDA graph; it is
+recorded here and not changed, because it touches the approved detector
+rules.
+
 ## Known limitations
 
 - **Drift rejection is verified on one constructed real file.** The
@@ -253,9 +307,11 @@ exact overlay on Pause, and Discard removed the session folder.
   ruled out (design 17).
 - **Analysed rate decides whether events are detected.** Below 10
   analysed frames per second, detection is reported inactive with the
-  reason. On this laptop the engine reached 4.5 analysed fps at 1x
-  playback (measured on AC power; about 6 on battery in an earlier run),
-  so normal-speed live detection is not reliable here.
+  reason. With CUDA graph inference this laptop reaches about 9-13
+  analysed fps at 1x (4.5 before), so detection is reported active, but
+  the 3-frame limb-speed gap means no event can form below about 20
+  analysed fps (see "CUDA Graph inference"). **Normal-speed live event
+  detection is still not working on this hardware.**
 - **Overlay hidden during playback** (see Decisions): exact when paused.
 - **Live event peaks are one frame (16.7 ms) late** relative to offline, on
   every matched event, as design 10.4 predicts from the trailing smoothing

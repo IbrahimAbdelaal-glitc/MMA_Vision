@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LiveEvent } from '../types/live'
-import { liveTally, toStrikeEvent } from './liveView'
+import { engineLocation, liveTally, toStrikeEvent } from './liveView'
 
 function event(overrides: Partial<LiveEvent>): LiveEvent {
   return {
@@ -25,5 +25,18 @@ describe('live view helpers', () => {
   it('marks converted events provisional and keeps unscored values null', () => {
     const converted = toStrikeEvent(event({ scoreStatus: 'unscored_warm_up', detectionClass: null, kinematicScore: null }))
     expect(converted).toMatchObject({ provisional: true, detectionClass: null, kinematicScore: null, timeSeconds: 1 })
+  })
+})
+
+describe('engine location text', () => {
+  it('names the device and which inference path ran, so a fallback is never silent', () => {
+    expect(engineLocation('cuda:0', 'cuda_graph')).toBe(' · GPU (cuda:0) · CUDA graph')
+    expect(engineLocation('cuda:0', 'eager')).toBe(' · GPU (cuda:0) · standard inference')
+    expect(engineLocation('cpu', 'eager')).toBe(' · CPU · standard inference')
+  })
+
+  it('says nothing it does not know', () => {
+    expect(engineLocation(null, null)).toBe('')
+    expect(engineLocation('cuda:0', null)).toBe(' · GPU (cuda:0)')
   })
 })
