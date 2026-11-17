@@ -1,0 +1,40 @@
+MMA VISION - OPPONENT DIRECTION ANALYSIS
+=============================================
+Events analyzed: 55
+
+APPROACH CHANGE
+Positive = endpoint moved closer to opponent.
+Negative = endpoint moved farther away.
+
+DIRECTION ALIGNMENT
+Closer to +1 = movement toward opponent.
+Around 0 = sideways movement.
+Closer to -1 = movement away from opponent.
+
+Very Strong
+-------------------------
+Events: 3
+Average approach change: -80.96 px
+Average direction alignment: -0.339
+Average valid samples: 12.00
+
+Strong
+-------------------------
+Events: 8
+Average approach change: 7.42 px
+Average direction alignment: 0.252
+Average valid samples: 12.00
+
+Review
+-------------------------
+Events: 15
+Average approach change: -19.87 px
+Average direction alignment: -0.060
+Average valid samples: 12.00
+
+Low
+-------------------------
+Events: 29
+Average approach change: 3.02 px
+Average direction alignment: -0.083
+Average valid samples: 11.90

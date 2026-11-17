@@ -1,0 +1,26 @@
+MMA VISION - MOVEMENT ANALYSIS REPORT
+=============================================
+
+Frames analyzed: 900
+Video duration: 14.98 seconds
+
+
+Blue Corner
+------------------------------
+movement_speed_px_s: Median = 151.73 px/s | 95th percentile = 418.65 px/s
+wrist_speed_px_s: Median = 96.86 px/s | 95th percentile = 879.03 px/s
+ankle_speed_px_s: Median = 64.18 px/s | 95th percentile = 577.63 px/s
+Total movement: 3619.37 pixels
+
+Red Corner
+------------------------------
+movement_speed_px_s: Median = 163.22 px/s | 95th percentile = 577.37 px/s
+wrist_speed_px_s: Median = 122.48 px/s | 95th percentile = 805.70 px/s
+ankle_speed_px_s: Median = 59.06 px/s | 95th percentile = 627.15 px/s
+Total movement: 4593.67 pixels
+
+FIGHTER DISTANCE
+------------------------------
+Average distance: 402.80 pixels
+Minimum distance: 170.88 pixels
+Maximum distance: 712.90 pixels
