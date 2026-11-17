@@ -24,8 +24,9 @@ attempts and grappling, the referee.
 
 **Uncertain** (the Uncertain verdict, never added as missed):
 
-* knees and elbows: MMA Vision has no type for them yet. Decide a rule before
-  labelling a large set, and write it here;
+* knees and elbows, always (decided 2026-11-17): MMA Vision has no type for
+  them, so they count neither for nor against a detector. Do not add them as
+  missed strikes. If a rule for them is ever added, relabel these moments;
 * a strike you cannot see well enough: occluded, cut by an edit, motion blur,
   inside a clinch;
 * a feint you cannot tell from a committed strike.
