@@ -43,8 +43,9 @@ The address bar keeps the job: `http://localhost:5173/?job=<job_id>` reopens
 that job after a reload, or on another tab.
 
 While a job runs, the progress shown is exactly what `GET /jobs/{job_id}`
-reports. With the current backend that stays at "Starting pipeline", 0 %,
-until the run ends, because `pipeline.py` does not flush its stage markers.
+reports: the current stage and how many of the nine are complete. The backend
+updates it as each stage starts and ends, so the bar steps by about 11 % and
+holds still within a long stage.
 
 ## Match Ended, event by event
 
@@ -59,11 +60,13 @@ file it could not read.
   strip with one lane per fighter.
 - **Selected event**: an event's measurements and its opponent-direction
   values from `opponent_direction_analysis.csv`, with previous and next.
-- **Replay**: the original footage, played from your own copy. The API does
-  not serve the uploaded video, so the replay plays the file uploaded from
-  this page or, for a job opened from its address, a copy you choose again. A
-  chosen copy must have exactly the upload's size. Selecting an event jumps
-  the replay to the event's start.
+- **Replay**: the annotated video by default, from `GET /jobs/{job_id}/video`.
+  The backend makes an H.264 copy of `movement_analysis.mp4` the first time
+  it is asked for, frame for frame. The original footage is the other
+  source, played from your own copy: the API does not serve the uploaded
+  video, so it plays the file uploaded from this page or, for a job opened
+  from its address, a copy you choose again with exactly the upload's size.
+  Selecting an event jumps either video to the event's start.
 - **Movement over time**: redrawn from `movement_metrics_cleaned.csv`, from
   the same columns the backend's PNG charts plot. The figures beside it are
   quoted from `movement_report.txt`, and the backend's own chart is one click
@@ -73,8 +76,10 @@ file it could not read.
   `opponent_direction_report.txt`.
 
 The annotated video, `movement_analysis.mp4`, is saved with the mp4v codec,
-which Chrome, Edge and Firefox cannot play. The dashboard offers it as a
-download only.
+which Chrome, Edge and Firefox cannot play. The dashboard never plays that
+file; it offers it as a download, and the replay plays the backend's H.264
+copy. Making that copy needs ffmpeg with libx264 on the backend machine (on
+PATH, or set `MMA_FFMPEG`).
 
 ## Check it
 
@@ -121,8 +126,9 @@ Phase 3: Match Ended shows a completed job event by event: the event table
 and strip, the selected event, a replay of the original footage, and the
 movement and opponent-direction charts.
 
-Not yet built: playing the annotated video in the page (it needs an H.264
-copy from the backend), job progress while a run is going (the backend's
-stage markers reach the API only when the run ends), and live tracking. The
-Live Monitoring counters, overlays and metrics stay empty until the live
-engine exists. An offline analysis job never fills them.
+Phase 4: job progress follows the stages while a run is going, and the
+replay plays the annotated video.
+
+Not yet built: live tracking. The Live Monitoring counters, overlays and
+metrics stay empty until the live engine exists. An offline analysis job
+never fills them.

@@ -22,7 +22,7 @@ import { ResultSummary } from '../analytics/ResultSummary'
 import { ScoreCard } from '../analytics/ScoreCard'
 import { ScorecardCheck } from '../analytics/ScorecardCheck'
 import { ScoringRules } from '../analytics/ScoringRules'
-import { ReplayPanel } from '../replay/ReplayPanel'
+import { ReplayPanel, type AnnotatedVideo } from '../replay/ReplayPanel'
 import { SelectedEvent, type EventDirection } from '../replay/SelectedEvent'
 import { EventTimeline, type EventFilter, type TimelineEvents } from '../timeline/EventTimeline'
 import {
@@ -47,7 +47,7 @@ import { useMatchEvents } from './useMatchEvents'
 
 interface MatchEndedProps {
   job: JobState
-  /** The video the replay plays: always a file on this computer. */
+  /** The original footage the replay can play: a file on this computer. */
   replay: ReplayVideo
   /** Loads the results of the completed job again. */
   onRetry: () => void
@@ -144,6 +144,12 @@ export function MatchEnded({ job, replay, onRetry }: MatchEndedProps) {
   const directionProblem =
     directionPart && directionPart.state !== 'ready' ? directionPart.message : null
 
+  const processedVideo = lookupFile(phase, ARTIFACT_PATHS.processedVideo)
+  const annotated: AnnotatedVideo =
+    processedVideo.state === 'absent' || !job.jobId
+      ? { state: 'absent' }
+      : { state: 'available', jobId: job.jobId }
+
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-5 xl:px-6">
       <Notice notice={matchNotice(phase)} onRetry={onRetry} />
@@ -194,7 +200,7 @@ export function MatchEnded({ job, replay, onRetry }: MatchEndedProps) {
             classes={byClass}
             problem={directionProblem}
           />
-          <ProcessedVideoPanel video={lookupFile(phase, ARTIFACT_PATHS.processedVideo)} />
+          <ProcessedVideoPanel video={processedVideo} />
           <ArtifactsPanel
             finalEvents={lookupFile(phase, ARTIFACT_PATHS.finalEvents)}
             scorecardReport={lookupFile(phase, ARTIFACT_PATHS.scorecardReport)}
@@ -215,7 +221,12 @@ export function MatchEnded({ job, replay, onRetry }: MatchEndedProps) {
       >
         {data && (
           <div className="space-y-5 xl:col-start-2 xl:row-start-1 xl:tall:sticky xl:tall:top-4">
-            <ReplayPanel replay={replay} onVideoElement={setReplayElement} />
+            <ReplayPanel
+              replay={replay}
+              annotated={annotated}
+              startAt={startTime}
+              onVideoElement={setReplayElement}
+            />
             <SelectedEvent
               event={selected}
               direction={eventDirection}

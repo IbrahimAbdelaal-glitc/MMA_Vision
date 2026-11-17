@@ -35,8 +35,9 @@ interface JobProgressProps {
 /**
  * The analysis job, in the Live Monitoring notice area: the upload, the queue,
  * the processing, and how it ended. Every value is one the backend reported.
- * Nothing is estimated between two status checks, so with the current backend
- * the bar can sit at 0 % until the run ends.
+ * The backend moves its progress when each of the nine stages starts and
+ * ends, so the bar steps by about 11 % and holds still within a long stage.
+ * Nothing is estimated between two reports.
  */
 export function JobProgress({ job, onViewResults }: JobProgressProps) {
   const running = job.status?.status === 'queued' || job.status?.status === 'processing'
@@ -134,7 +135,7 @@ function describe(job: JobState, now: number, onViewResults: () => void): CardCo
       detail: status.currentStage ?? 'Stage not reported',
       bar: { name: 'Analysis progress', value: status.progress },
       facts: stages ? `${stages} stages complete` : null,
-      note: 'Progress is shown exactly as the backend reports it',
+      note: 'Progress is reported as each stage starts and ends, so it holds still within a stage',
       time: elapsed,
     }
   }
