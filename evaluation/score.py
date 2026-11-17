@@ -34,10 +34,18 @@ Layout of a reusable dataset (validation/ is git-ignored: footage stays local):
         reviews/*.json        optional further reviews (inter-reviewer agreement)
         detections/<name>.csv event lists to score (live events.csv, offline
                               classified_strike_candidates.csv, live.replay output)
+        review_list.csv       what to review: every detector's events in one blind
+                              list (python -m evaluation.score review-list <clip>)
 
     python -m evaluation.score dataset validation/datasets [--tolerance 0.25] [--out report.json]
     python -m evaluation.score file --truth truth.json --detections events.csv
     python -m evaluation.score init --video clip.mp4 --name clip01 [--root validation/datasets]
+    python -m evaluation.score review-list validation/datasets/clip01 [--merge 0.15]
+
+Why one blind list: a review becomes ground truth for the moments it covers,
+and anything else must be added as a missed event. Reviewing the union of all
+detectors' events gives every detection a verdict, and leaving out which
+detector found each event keeps the reviewer from favouring one.
 """
 from __future__ import annotations
 
@@ -56,6 +64,15 @@ from evaluation.metrics import (FIGHTERS, MIN_EVENTS_FOR_CLAIMS, MIN_MINUTES_FOR
 # the same movement. A matching rule (one strike lasts about 0.3-0.5 s), not a
 # tuned value: report results at the tolerance you choose (--tolerance).
 TOLERANCE = 0.25
+
+# Events of different detectors with the same fighter, limb side and type
+# within this many seconds of the first of them are one row of the review
+# list. Kept below the 0.2 s of a fast 1-2 and below TOLERANCE, so a merged
+# row stays within matching distance of every event it stands for. Events on
+# different sides or of different types are never merged: the reviewer marks
+# a second row for one movement as Duplicate.
+MERGE_SECONDS = 0.15
+REVIEW_LIST = "review_list.csv"
 
 
 class IncompleteReview(ValueError):
@@ -241,6 +258,57 @@ def score_dataset(root: Path, tolerance: float = TOLERANCE) -> dict:
     return {"detectors": results, "skipped": skipped}
 
 
+def _review_rows(path: Path) -> list:
+    """An event list's (t, fighter, side, type) rows, read as review.html reads them."""
+    rows = []
+    with Path(path).open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if row.get("offline_match") == "offline_only":
+                continue
+            raw_t = row.get("peak_t") or row.get("peak_time") or row.get("t")
+            if not raw_t:
+                continue
+            rows.append({"t": float(raw_t),
+                         "fighter": (row.get("corner") or row.get("fighter") or "").lower(),
+                         "side": (row.get("side") or row.get("limb") or "").lower(),
+                         "type": (row.get("type") or row.get("event_type") or "").lower()})
+    return rows
+
+
+def review_list(detection_files, merge: float = MERGE_SECONDS) -> list:
+    """Every event of every file, near-identical ones (see MERGE_SECONDS) as one row, by time."""
+    groups: dict = {}
+    for path in detection_files:
+        for row in _review_rows(path):
+            groups.setdefault((row["fighter"], row["side"], row["type"]), []).append(row["t"])
+    out = []
+    for (fighter, side, kind), times in groups.items():
+        times.sort()
+        cluster: list = []
+        for t in times + [None]:
+            if t is not None and cluster and t - cluster[0] <= merge + 1e-9:
+                cluster.append(t)
+                continue
+            if cluster:
+                out.append({"t": round(sum(cluster) / len(cluster), 4), "fighter": fighter, "side": side, "type": kind})
+            cluster = [t]
+    return sorted(out, key=lambda r: (r["t"], r["fighter"], r["side"], r["type"]))
+
+
+def write_review_list(clip: Path, merge: float = MERGE_SECONDS) -> tuple:
+    """clip/review_list.csv from clip/detections/*.csv; returns (path, rows, files used)."""
+    files = sorted((Path(clip) / "detections").glob("*.csv"))
+    if not files:
+        raise FileNotFoundError(f"{Path(clip) / 'detections'} has no event lists (*.csv) to review")
+    rows = review_list(files, merge)
+    target = Path(clip) / REVIEW_LIST
+    with target.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["t", "fighter", "side", "type"])
+        writer.writeheader()
+        writer.writerows(rows)
+    return target, rows, files
+
+
 def init_clip(video: Path, name: str, root: Path, copy: bool = False) -> Path:
     import cv2
     capture = cv2.VideoCapture(str(video))
@@ -285,12 +353,26 @@ def main(argv: Optional[list] = None) -> int:
     it.add_argument("--name", required=True)
     it.add_argument("--root", type=Path, default=Path("validation") / "datasets")
     it.add_argument("--copy", action="store_true", help="copy the video into the clip folder")
+    rl = sub.add_parser("review-list", help="write <clip>/review_list.csv: all detectors' events, blind, to review")
+    rl.add_argument("clip", type=Path)
+    rl.add_argument("--merge", type=float, default=MERGE_SECONDS)
     args = parser.parse_args(argv)
 
     if args.command == "init":
         folder = init_clip(args.video, args.name, args.root, args.copy)
         print(f"Created {folder}. Next: review events in evaluation/review.html, export the complete review "
               f"as {folder / 'truth.json'}, and put event lists to score in {folder / 'detections'}.")
+        return 0
+
+    if args.command == "review-list":
+        try:
+            target, rows, files = write_review_list(args.clip, args.merge)
+        except FileNotFoundError as error:
+            print(error, file=sys.stderr)
+            return 2
+        events = sum(len(_review_rows(f)) for f in files)
+        print(f"Wrote {target}: {len(rows)} rows to review from {events} events in {len(files)} event lists "
+              f"({', '.join(f.name for f in files)}). Open it in evaluation/review.html with the clip's video.")
         return 0
 
     if args.command == "file":
