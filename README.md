@@ -212,13 +212,25 @@ Message formats and lifecycle rules: [docs/live-engine.md](docs/live-engine.md).
   slower playback (for example 0.25x) gives it enough frames.
 * Offline analysis runs one pose pass over the video (Movement Analysis; the
   Pose Estimation stage reuses its keypoints, see `src/pose_pass.py`) on the
-  GPU when PyTorch sees one. Set `MMA_OFFLINE_DEVICE` to `cpu` or `cuda:0` to
-  choose (default `auto`). Measured on the 6 s clip, the two pose stages took
+  GPU when PyTorch sees one. Set `MMA_OFFLINE_DEVICE` to choose: `auto`
+  (default: GPU if available, else CPU), `cpu`, or `cuda` / `cuda:N`. An
+  explicit CUDA device that does not exist stops the job with a clear error
+  instead of silently running on the CPU. The keypoints are reused only when
+  the video, the model file's contents, the tracking settings, the keypoint
+  threshold and the ultralytics version all match and the keypoint file is
+  unchanged; otherwise the stage runs its own pass. Measured on the 6 s clip, the two pose stages took
   66 s before (two CPU passes), 39 s with one CPU pass and 21 s on the GPU
   (RTX 4050 Laptop, including model load and writing the annotated video).
-  GPU and CPU keypoints differ in the last digits, so an analysis repeated on
-  the other device can differ slightly; the one CPU pass is byte-identical to
-  the two before.
+  On the CPU the one pass is byte-identical to the two before. GPU and CPU
+  keypoints are not identical: on the 15 s test clip the median difference
+  was 0.02 px, but 11 of 1,800 fighter rows differed by more than 5 px (up to
+  38 px, frames where the model is unsure), and one borderline event changed
+  from punch-like (CPU) to kick-like (GPU), so Blue's Experimental Activity
+  Score was 8 on the CPU and 7 on the GPU; the other 10 final events were the
+  same. Neither device is known to be more accurate (there is no labelled
+  ground truth). Use `MMA_OFFLINE_DEVICE=cpu` when results must match the
+  earlier CPU-only versions. Full pipeline on that clip: 235 s before this
+  change (two CPU passes), 158 s with one CPU pass, 72 s on the GPU.
 
 ## Videos
 

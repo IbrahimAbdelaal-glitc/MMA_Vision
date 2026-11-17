@@ -68,3 +68,26 @@ def test_same_limb_duplicates_are_still_removed(tmp_path):
             candidate("blue", "right", "punch-like", 2.2, extension=0.10)]
 
     assert refine(tmp_path, rows) == [("blue", "right", "punch-like", 2.0)]
+
+
+def test_a_one_two_one_combination_keeps_three_punches(tmp_path):
+    rows = [candidate("blue", "right", "punch-like", 2.0),
+            candidate("blue", "left", "punch-like", 2.2),
+            candidate("blue", "right", "punch-like", 2.4)]
+
+    assert len(refine(tmp_path, rows)) == 3
+
+
+def test_three_alternating_kicks_half_a_second_apart_are_all_kept(tmp_path):
+    rows = [candidate("red", "right", "kick-like", 5.0),
+            candidate("red", "left", "kick-like", 5.5),
+            candidate("red", "right", "kick-like", 6.0)]
+
+    assert [r[1] for r in sorted(refine(tmp_path, rows), key=lambda r: r[3])] == ["right", "left", "right"]
+
+
+def test_a_kick_and_a_punch_at_the_same_moment_are_both_kept(tmp_path):
+    rows = [candidate("red", "left", "kick-like", 5.0),
+            candidate("red", "right", "punch-like", 5.05)]
+
+    assert len(refine(tmp_path, rows)) == 2
