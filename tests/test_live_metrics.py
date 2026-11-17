@@ -33,14 +33,25 @@ def test_nulls_when_a_fighter_is_missing_or_the_gap_is_too_long():
     assert m["keypoint_confidence"] is None and m["fighters_tracked"] == 0
 
 
-def test_rate_meter_reports_detection_active_from_10_frames_per_second():
+def test_detection_threshold_is_the_rate_limb_speed_needs():
+    """Limb speed is only measured between samples at most 0.05 s apart
+    (LIMB_SPEED_MAX_GAP), so detection cannot work below 20 analysed frames
+    per second; the threshold is derived from that rule, not set beside it."""
+    from live import constants as K
+    assert K.LIMB_SPEED_MAX_GAP == pytest.approx(0.05)
+    assert K.MIN_ANALYSED_RATE == pytest.approx(1.0 / K.LIMB_SPEED_MAX_GAP)
+    assert K.MIN_ANALYSED_RATE == pytest.approx(20.0)
+
+
+def test_rate_meter_reports_detection_active_from_20_frames_per_second():
     meter = RateMeter()
-    results = [meter.update(i / 12) for i in range(40)]
+    results = [meter.update(i / 24) for i in range(60)]
     assert results[0][0] is False
-    assert results[-1][0] is True and results[-1][1] == pytest.approx(12, abs=0.6)
+    assert results[-1][0] is True and results[-1][1] == pytest.approx(24, abs=1.2)
     meter = RateMeter()
-    results = [meter.update(i / 8) for i in range(40)]
-    assert results[-1][0] is False and "below 10" in results[-1][2]
+    results = [meter.update(i / 12) for i in range(40)]       # active under the old 10 /s rule
+    assert results[-1][0] is False
+    assert "below 20" in results[-1][2] and "0.05 s" in results[-1][2]
 
 
 def scored(score, corner="blue"):

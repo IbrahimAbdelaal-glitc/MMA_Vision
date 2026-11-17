@@ -84,7 +84,13 @@ SELF_CHECK_JUMP_MS = 100.0
 SELF_CHECK_JUMP_FRAME = 30
 
 # Detection (8, 10)
-MIN_ANALYSED_RATE = 10.0            # analysed frames per second
+# Analysed frames per second below which detection is reported inactive.
+# Derived, not chosen: limb speed is only measured between samples at most
+# LIMB_SPEED_MAX_GAP (0.05 s) apart, so below 20 analysed frames per second
+# no speed and so no event can form. The approved design said 10; measured
+# 2026-11-17, 10-13 /s was reported active yet produced no event (user chose
+# to raise it: docs/live-engine.md, "Detection threshold").
+MIN_ANALYSED_RATE = 1.0 / LIMB_SPEED_MAX_GAP     # 20 analysed frames per second
 RATE_WINDOW_SECONDS = 2.0
 RATE_MIN_WINDOW_SECONDS = 0.1       # plan decision 3
 THRESHOLD_WARM_UP = 60              # smoothed samples per stream
