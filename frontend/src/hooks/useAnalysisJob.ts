@@ -132,7 +132,15 @@ function trackingMessage(error: unknown): string {
 
 function failedEverywhere(message: string): AnalysisData {
   const failed = { state: 'error', message } as const
-  return { results: failed, artifacts: failed, classification: failed }
+  return {
+    results: failed,
+    artifacts: failed,
+    classification: failed,
+    events: failed,
+    direction: failed,
+    movement: failed,
+    movementReport: failed,
+  }
 }
 
 interface Options {

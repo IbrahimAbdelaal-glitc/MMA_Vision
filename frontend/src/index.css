@@ -66,6 +66,13 @@
   --color-corner-red-surface: #291a26;
   --color-corner-red-line: #643442;
 
+  /* The corner colours as chart marks. The Figma shades above are too light
+     for lines and dots on the panel surfaces (OKLCH L 0.70, above the 0.67
+     dark-mode ceiling), so charts use the same hue and chroma at L 0.66.
+     Checked with the dataviz palette validator against #101824 and #131b28. */
+  --color-series-blue: #4993f1;
+  --color-series-red: #ee5667;
+
   /* Status */
   --color-ok: #73dfc0;
   --color-sage: #c6dab1;

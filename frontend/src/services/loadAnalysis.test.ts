@@ -4,14 +4,17 @@ import {
   ARTIFACT_FILES,
   ARTIFACTS,
   artifactsResponse,
-  classifiedCsv,
   COMPLETED_STATUS,
   JOB_ID,
+  RESULT_FILES,
   RESULTS,
 } from '../test/fixtures/realJob'
 import { loadAnalysis } from './loadAnalysis'
 
 const CLASSIFIED = 'results/classified_strike_candidates.csv'
+const DIRECTION = 'results/opponent_direction_analysis.csv'
+const MOVEMENT = 'results/movement_metrics_cleaned.csv'
+const MOVEMENT_REPORT = 'results/movement_report.txt'
 
 let backend: FakeBackend
 
@@ -19,15 +22,26 @@ beforeEach(() => {
   backend = new FakeBackend().install()
 })
 
+/** Every result file the dashboard reads, served as the real run wrote it. */
+function realFiles() {
+  return Object.fromEntries(
+    Object.entries(RESULT_FILES).map(([path, text]) => [path, textReply(200, text)]),
+  )
+}
+
 /** The real completed job, with any part replaced. */
 function completedJob(overrides: Partial<FakeJob> = {}): FakeJob {
   return {
     statuses: [COMPLETED_STATUS],
     results: jsonReply(200, RESULTS),
     artifacts: jsonReply(200, ARTIFACTS),
-    files: { [CLASSIFIED]: textReply(200, classifiedCsv) },
+    files: realFiles(),
     ...overrides,
   }
+}
+
+function withoutFile(path: string) {
+  return jsonReply(200, artifactsResponse(ARTIFACT_FILES.filter(([file]) => file !== path)))
 }
 
 const load = () => loadAnalysis(JOB_ID, new AbortController().signal)
@@ -54,9 +68,31 @@ describe('loadAnalysis', () => {
     expect(backend.requests).toContain(`GET /api/jobs/${JOB_ID}/files/${CLASSIFIED}`)
   })
 
+  it('loads the events, their direction and the movement data of the run', async () => {
+    backend.addJob(JOB_ID, completedJob())
+
+    const data = await load()
+
+    expect(data.events.state === 'ready' && data.events.data.events).toHaveLength(55)
+    expect(data.direction.state === 'ready' && data.direction.data.rows).toHaveLength(55)
+    expect(data.movement.state === 'ready' && data.movement.data.time).toHaveLength(900)
+    expect(data.movementReport).toMatchObject({ state: 'ready', data: { frames: 900 } })
+    for (const path of [DIRECTION, MOVEMENT, MOVEMENT_REPORT]) {
+      expect(backend.requests).toContain(`GET /api/jobs/${JOB_ID}/files/${path}`)
+    }
+  })
+
+  it('downloads the classification file once for both the counts and the events', async () => {
+    backend.addJob(JOB_ID, completedJob())
+
+    await load()
+
+    const downloads = backend.requests.filter((request) => request.endsWith(CLASSIFIED))
+    expect(downloads).toHaveLength(1)
+  })
+
   it('marks the class counts missing when the run wrote no classification file', async () => {
-    const withoutClassified = ARTIFACT_FILES.filter(([path]) => path !== CLASSIFIED)
-    backend.addJob(JOB_ID, completedJob({ artifacts: jsonReply(200, artifactsResponse(withoutClassified)) }))
+    backend.addJob(JOB_ID, completedJob({ artifacts: withoutFile(CLASSIFIED) }))
 
     const data = await load()
 
@@ -64,7 +100,33 @@ describe('loadAnalysis', () => {
       state: 'missing',
       message: expect.stringMatching(/classified_strike_candidates\.csv/),
     })
+    expect(data.events).toEqual(data.classification)
     expect(data.results.state).toBe('ready')
+  })
+
+  it('names each Phase 3 file the run did not write, and loads the rest', async () => {
+    backend.addJob(JOB_ID, completedJob({ artifacts: withoutFile(MOVEMENT) }))
+
+    const data = await load()
+
+    expect(data.movement).toEqual({
+      state: 'missing',
+      message: 'This job did not produce movement_metrics_cleaned.csv.',
+    })
+    expect(data.movementReport.state).toBe('ready')
+    expect(data.direction.state).toBe('ready')
+  })
+
+  it('reports a movement file that cannot be downloaded', async () => {
+    backend.addJob(
+      JOB_ID,
+      completedJob({ files: { ...realFiles(), [MOVEMENT]: textReply(500, '') } }),
+    )
+
+    const data = await load()
+
+    expect(data.movement).toEqual({ state: 'error', message: expect.stringMatching(/HTTP 500/) })
+    expect(data.events.state).toBe('ready')
   })
 
   it('reports a missing scorecard without losing the file list', async () => {
@@ -85,13 +147,18 @@ describe('loadAnalysis', () => {
     expect(data.results.state).toBe('ready')
     expect(data.artifacts).toEqual({ state: 'error', message: expect.stringMatching(/HTTP 500/) })
     expect(data.classification).toEqual({ state: 'error', message: expect.stringMatching(/file list/) })
+    expect(data.movement).toEqual({ state: 'error', message: expect.stringMatching(/file list/) })
   })
 
   it('reports a classification file that cannot be downloaded', async () => {
-    backend.addJob(JOB_ID, completedJob({ files: { [CLASSIFIED]: textReply(500, '') } }))
+    backend.addJob(
+      JOB_ID,
+      completedJob({ files: { ...realFiles(), [CLASSIFIED]: textReply(500, '') } }),
+    )
 
     const data = await load()
 
     expect(data.classification).toEqual({ state: 'error', message: expect.stringMatching(/HTTP 500/) })
+    expect(data.events).toEqual(data.classification)
   })
 })

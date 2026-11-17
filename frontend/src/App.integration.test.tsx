@@ -7,12 +7,12 @@ import {
   ARTIFACT_FILES,
   ARTIFACTS,
   artifactsResponse,
-  classifiedCsv,
   COMPLETED_STATUS,
   FAILED_STATUS,
   JOB_ID,
   PROCESSING_STATUS,
   QUEUED_STATUS,
+  RESULT_FILES,
   RESULTS,
 } from './test/fixtures/realJob'
 
@@ -42,9 +42,40 @@ function completedJob(overrides: Partial<FakeJob> = {}): FakeJob {
     statuses: [COMPLETED_STATUS],
     results: jsonReply(200, RESULTS),
     artifacts: jsonReply(200, ARTIFACTS),
-    files: { [CLASSIFIED]: textReply(200, classifiedCsv) },
+    files: Object.fromEntries(
+      Object.entries(RESULT_FILES).map(([path, text]) => [path, textReply(200, text)]),
+    ),
     ...overrides,
   }
+}
+
+/** The text of every cell of the event table's rows, header row left out. */
+function eventRows(): string[][] {
+  const table = screen.getByRole('region', { name: 'Event timeline and detailed statistics' })
+  return within(table)
+    .getAllByRole('row')
+    .slice(1)
+    .map((row) => [...row.querySelectorAll('th, td')].map((cell) => cell.textContent?.trim() ?? ''))
+}
+
+/** Waits for Match Ended to show the events of the run. */
+async function waitForEvents() {
+  const table = await screen.findByRole('region', { name: 'Event timeline and detailed statistics' })
+  await within(table).findByRole('button', { name: /^00:00\.617 Red/ })
+  return table
+}
+
+/** Records every seek the dashboard makes on a <video>; jsdom has no media engine. */
+function recordSeeks(video: HTMLElement): number[] {
+  const seeks: number[] = []
+  Object.defineProperty(video, 'currentTime', {
+    configurable: true,
+    get: () => seeks.at(-1) ?? 0,
+    set: (seconds: number) => {
+      seeks.push(seconds)
+    },
+  })
+  return seeks
 }
 
 /** The backend indicator in the top bar. */
@@ -257,8 +288,10 @@ describe('Match Ended with a completed job', () => {
     expect(comparison('Very Strong events')).toEqual(['2', '1'])
     expect(comparison('Review events')).toEqual(['8', '7'])
     expect(comparison('Low events')).toEqual(['15', '14'])
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Final fight analysis')
-    expect(screen.getByText(/mma cllip -1-highlight\.mp4/)).toBeInTheDocument()
+    const heading = screen.getByRole('heading', { level: 1 })
+    expect(heading).toHaveTextContent('Final fight analysis')
+    // The name the backend recorded, under the heading. (The replay panel names it too.)
+    expect(heading.parentElement).toHaveTextContent(/mma cllip -1-highlight\.mp4/)
   })
 
   it('links every file the run wrote, through the proxy', async () => {
@@ -337,5 +370,227 @@ describe('Match Ended with a completed job', () => {
     await openJobFromAddress()
 
     expect(await screen.findByText(/does not match the scoring rules/)).toBeInTheDocument()
+  })
+})
+
+describe('Match Ended: events, replay, movement and direction', () => {
+  it('lists the scored events of the run in time order with their measurements', async () => {
+    backend.addJob(JOB_ID, completedJob())
+    await openJobFromAddress()
+    await waitForEvents()
+
+    const rows = eventRows()
+    expect(rows).toHaveLength(11)
+    // final_strike_report.txt: red 0.616667 punch-like right 80.47 Very Strong.
+    expect(rows[0]).toEqual(['00:00.617', 'Red', 'Punch-like · right', 'Very Strong', '3', '0.91', '80.47'])
+    expect(rows[2]).toEqual(['00:01.283', 'Blue', 'Punch-like · right', 'Very Strong', '3', '0.94', '96.33'])
+    expect(rows[10]).toEqual(['00:11.600', 'Red', 'Kick-like · left', 'Strong', '2', '0.96', '76.80'])
+  })
+
+  it('names the span of the event strip in clock times, as the table does', async () => {
+    backend.addJob(JOB_ID, completedJob())
+    await openJobFromAddress()
+    const table = await waitForEvents()
+
+    // The strip runs to the last analysed frame, 899 / 60 fps = 14.98333… s.
+    expect(
+      within(table).getByRole('img', {
+        name: 'Timeline of 11 events, 3 Blue and 8 Red, from 00:00.000 to 00:14.983.',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the Review and Low candidates too when asked, at zero points', async () => {
+    backend.addJob(JOB_ID, completedJob())
+    const user = await openJobFromAddress()
+    const table = await waitForEvents()
+
+    await user.click(within(table).getByRole('button', { name: 'All candidates (55)' }))
+
+    const rows = eventRows()
+    expect(rows).toHaveLength(55)
+    // The first row of the file: blue right punch-like, peak 0.0833 s, Low.
+    expect(rows[0]).toEqual(['00:00.083', 'Blue', 'Punch-like · right', 'Low', '0', '0.94', '44.46'])
+    expect(within(table).getByRole('button', { name: 'Scored events (11)' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  })
+
+  it("shows the selected event's measurements, including its direction", async () => {
+    backend.addJob(JOB_ID, completedJob())
+    const user = await openJobFromAddress()
+    const table = await waitForEvents()
+
+    await user.click(within(table).getByRole('button', { name: /^00:01\.283 Blue/ }))
+
+    const card = screen.getByRole('region', { name: 'Selected event' })
+    for (const text of [
+      'Blue',
+      'Punch-like · right',
+      'Very Strong · 3 points',
+      '00:01.150',
+      '00:01.483',
+      '2,749 px/s',
+      '96.33',
+      '0.94',
+      '−0.841',
+      '−45.56 px',
+      '12 of 12 frames',
+    ]) {
+      expect(card).toHaveTextContent(text)
+    }
+    expect(card).toHaveTextContent(/not a confirmed landed strike/)
+  })
+
+  it('steps to the next and previous event', async () => {
+    backend.addJob(JOB_ID, completedJob())
+    const user = await openJobFromAddress()
+    const table = await waitForEvents()
+    await user.click(within(table).getByRole('button', { name: /^00:01\.283 Blue/ }))
+    const card = screen.getByRole('region', { name: 'Selected event' })
+
+    await user.click(within(card).getByRole('button', { name: 'Next event' }))
+    expect(card).toHaveTextContent('Peak 00:01.750')
+
+    await user.click(within(card).getByRole('button', { name: 'Previous event' }))
+    await user.click(within(card).getByRole('button', { name: 'Previous event' }))
+    expect(card).toHaveTextContent('Peak 00:01.000')
+  })
+
+  it('replays the video uploaded from this page and jumps to the selected event', async () => {
+    backend.acceptUploadAs(JOB_ID, completedJob())
+    const user = await renderApp()
+    await chooseAndAnalyse(user)
+    await waitForEvents()
+
+    const replay = screen.getByRole('region', { name: 'Replay' })
+    const video = within(replay).getByLabelText('Replay of title-fight.mp4')
+    expect(video).toHaveAttribute('src', 'blob:mma-vision-test')
+    expect(replay).toHaveTextContent(/uploaded from this page/)
+    const seeks = recordSeeks(video)
+
+    await user.click(screen.getByRole('button', { name: /^00:01\.283 Blue/ }))
+
+    // The event's start time, as the pipeline measured it.
+    expect(seeks).toEqual([1.15])
+  })
+
+  it('asks for the original video when the job was not uploaded here, and checks its size', async () => {
+    backend.addJob(JOB_ID, completedJob({ statuses: [{ ...COMPLETED_STATUS, file_size_bytes: 2048 }] }))
+    const user = await openJobFromAddress()
+    await waitForEvents()
+
+    const replay = screen.getByRole('region', { name: 'Replay' })
+    expect(replay).toHaveTextContent(/does not serve the uploaded video/)
+    expect(within(replay).queryByLabelText(/^Replay of/)).not.toBeInTheDocument()
+
+    const input = within(replay).getByLabelText('Choose the original video for replay')
+    await user.upload(input, new File(['0'.repeat(100)], 'other.mp4', { type: 'video/mp4' }))
+    expect(replay).toHaveTextContent(/100 bytes, but the analysed upload was 2,048 bytes/)
+    expect(within(replay).queryByLabelText(/^Replay of/)).not.toBeInTheDocument()
+
+    await user.upload(input, mp4('my-copy.mp4'))
+    expect(within(replay).getByLabelText('Replay of my-copy.mp4')).toBeInTheDocument()
+    expect(replay).toHaveTextContent(/same size as the analysed upload/)
+  })
+
+  it("charts the backend's movement data and quotes its movement report", async () => {
+    backend.addJob(JOB_ID, completedJob())
+    const user = await openJobFromAddress()
+    await waitForEvents()
+
+    const movement = screen.getByRole('region', { name: 'Movement over time' })
+    expect(within(movement).getByRole('img', { name: /Fighter movement speed/ })).toBeInTheDocument()
+    for (const text of ['151.73 px/s', '418.65 px/s', '163.22 px/s', '577.37 px/s']) {
+      expect(movement).toHaveTextContent(text)
+    }
+    expect(within(movement).getByRole('link', { name: 'Download fighter_movement_speed.png' })).toBeInTheDocument()
+
+    await user.click(within(movement).getByRole('button', { name: 'Distance' }))
+    for (const text of ['402.80 px', '170.88 px', '712.90 px']) expect(movement).toHaveTextContent(text)
+
+    await user.click(within(movement).getByRole('button', { name: 'Cumulative movement' }))
+    for (const text of ['3,619.37 px', '4,593.67 px']) expect(movement).toHaveTextContent(text)
+
+    const panel = screen.getByRole('region', { name: 'Movement analysis' })
+    expect(panel).toHaveTextContent('3,619 px')
+    expect(panel).toHaveTextContent('4,594 px')
+  })
+
+  it('reads the plotted values frame by frame with the keyboard', async () => {
+    backend.addJob(JOB_ID, completedJob())
+    const user = await openJobFromAddress()
+    await waitForEvents()
+    const movement = screen.getByRole('region', { name: 'Movement over time' })
+
+    within(movement).getByRole('img', { name: /Fighter movement speed/ }).focus()
+    await user.keyboard('{ArrowRight}{ArrowRight}')
+
+    // Frame 1 of movement_metrics_cleaned.csv: 15.0 and 34.635… px/s.
+    const reading = within(movement).getByRole('status', { name: 'Chart reading' })
+    expect(reading).toHaveTextContent('00:00.017')
+    expect(reading).toHaveTextContent('Blue 15.0 px/s')
+    expect(reading).toHaveTextContent('Red 34.6 px/s')
+  })
+
+  it("plots each event's direction and matches the backend's class averages", async () => {
+    backend.addJob(JOB_ID, completedJob())
+    const user = await openJobFromAddress()
+    await waitForEvents()
+
+    const direction = screen.getByRole('region', { name: 'Opponent direction by event' })
+    // opponent_direction_report.txt: -0.339, 0.252, -0.060, -0.083.
+    for (const text of ['−0.339', '+0.252', '−0.060', '−0.083']) expect(direction).toHaveTextContent(text)
+    expect(within(direction).getAllByRole('button', { name: /^(Blue|Red) / })).toHaveLength(55)
+
+    await user.click(within(direction).getByRole('button', { name: 'Approach change' }))
+    for (const text of ['−80.96 px', '+7.42 px', '−19.87 px', '+3.02 px']) {
+      expect(direction).toHaveTextContent(text)
+    }
+
+    await user.click(within(direction).getByRole('button', { name: /^Blue punch-like at 00:01\.283/ }))
+    expect(screen.getByRole('region', { name: 'Selected event' })).toHaveTextContent('Peak 00:01.283')
+
+    const panel = screen.getByRole('region', { name: 'Opponent direction' })
+    expect(panel).toHaveTextContent('−0.339')
+    expect(panel).toHaveTextContent('+0.252')
+  })
+
+  it('says which movement and direction files are missing, and keeps the rest', async () => {
+    const files = ARTIFACT_FILES.filter(
+      ([path]) =>
+        path !== 'results/movement_metrics_cleaned.csv' &&
+        path !== 'results/opponent_direction_analysis.csv',
+    )
+    backend.addJob(JOB_ID, completedJob({ artifacts: jsonReply(200, artifactsResponse(files)) }))
+    const user = await openJobFromAddress()
+    const table = await waitForEvents()
+
+    const movement = screen.getByRole('region', { name: 'Movement over time' })
+    expect(movement).toHaveTextContent('This job did not produce movement_metrics_cleaned.csv.')
+    // The report is a separate file, so its figures are still there.
+    expect(movement).toHaveTextContent('151.73 px/s')
+    expect(screen.getByRole('region', { name: 'Opponent direction by event' })).toHaveTextContent(
+      'This job did not produce opponent_direction_analysis.csv.',
+    )
+
+    await user.click(within(table).getByRole('button', { name: /^00:01\.283 Blue/ }))
+    expect(screen.getByRole('region', { name: 'Selected event' })).toHaveTextContent(
+      /Direction unavailable: This job did not produce opponent_direction_analysis\.csv\./,
+    )
+  })
+
+  it('keeps the mp4v processed video a download and never plays it in the page', async () => {
+    backend.acceptUploadAs(JOB_ID, completedJob())
+    const user = await renderApp()
+    await chooseAndAnalyse(user)
+    await waitForEvents()
+
+    const panel = screen.getByRole('region', { name: 'Processed video' })
+    expect(within(panel).getByRole('link', { name: 'Download movement_analysis.mp4' })).toBeInTheDocument()
+    expect(panel).toHaveTextContent(/mp4v/)
+    const sources = [...document.querySelectorAll('video')].map((video) => video.getAttribute('src'))
+    expect(sources.some((src) => src?.includes('movement_analysis.mp4'))).toBe(false)
   })
 })

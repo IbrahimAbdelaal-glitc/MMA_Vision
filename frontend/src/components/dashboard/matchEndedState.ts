@@ -90,8 +90,11 @@ export function matchNotice(phase: MatchPhase): MatchNotice {
         retry: false,
       }
     case 'loaded': {
-      const { results, artifacts, classification } = phase.data
-      if ([results, artifacts, classification].some((part) => part.state === 'error')) {
+      const { results, artifacts, classification, events, direction, movement, movementReport } =
+        phase.data
+      const parts = [results, artifacts, classification, events, direction, movement, movementReport]
+      // A file the run did not write is "missing", not an error: retrying cannot produce it.
+      if (parts.some((part) => part.state === 'error')) {
         return {
           tone: 'warn',
           label: 'Some results could not be loaded',
@@ -303,19 +306,37 @@ export function progressSummary(job: JobState): string {
   }
 }
 
-/** What the event timeline says in place of rows. */
-export function timelineMessage(phase: MatchPhase): string {
+/** What the event timeline says in place of rows, or null when it has rows to show. */
+export function timelineMessage(phase: MatchPhase): string | null {
   if (phase.kind !== 'loaded') {
     return 'No strike-event data retrieved. Timestamps, classifications and event details will come from the completed job’s CSV.'
   }
-  const eventFiles = [ARTIFACT_PATHS.finalEvents, ARTIFACT_PATHS.classifiedEvents].flatMap(
-    (path) => {
-      const lookup = lookupFile(phase, path)
-      return lookup.state === 'found' ? [lookup.file.name] : []
-    },
-  )
-  if (eventFiles.length === 0) {
-    return 'Event rows are not listed in the dashboard yet, and the event files of this job are not available.'
-  }
-  return `Event rows are not listed in the dashboard yet. They are in ${eventFiles.join(' and ')}, under Job files below.`
+  const { events } = phase.data
+  if (events.state === 'ready') return null
+  const finalEvents = lookupFile(phase, ARTIFACT_PATHS.finalEvents)
+  const fallback =
+    finalEvents.state === 'found' ? ` The scored events are still in ${finalEvents.file.name}, under Job files below.` : ''
+  return `Event rows unavailable: ${events.message}${fallback}`
+}
+
+/**
+ * Where the time axis of the event strip ends: the last analysed frame,
+ * from the movement data or its report, and never before the last event.
+ */
+export function timelineEnd(data: AnalysisData): number | null {
+  const lastFrame =
+    data.movement.state === 'ready'
+      ? (data.movement.data.time.at(-1) ?? null)
+      : data.movementReport.state === 'ready'
+        ? data.movementReport.data.durationSeconds
+        : null
+  const lastEvent =
+    data.events.state === 'ready'
+      ? data.events.data.events.reduce<number | null>((latest, event) => {
+          const end = event.endTime ?? event.peakTime
+          return end !== null && (latest === null || end > latest) ? end : latest
+        }, null)
+      : null
+  const end = Math.max(lastFrame ?? 0, lastEvent ?? 0)
+  return end > 0 ? end : null
 }

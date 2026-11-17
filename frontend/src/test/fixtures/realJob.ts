@@ -1,5 +1,9 @@
 import classifiedCsv from './classified_strike_candidates.csv?raw'
 import scorecardReport from './experimental_scorecard_report.txt?raw'
+import movementCsv from './movement_metrics_cleaned.csv?raw'
+import movementReport from './movement_report.txt?raw'
+import directionCsv from './opponent_direction_analysis.csv?raw'
+import directionReport from './opponent_direction_report.txt?raw'
 
 /*
  * One real run of the pipeline: job 4086db6d…, the 15-second clip
@@ -10,7 +14,15 @@ import scorecardReport from './experimental_scorecard_report.txt?raw'
 
 export const JOB_ID = '4086db6d-8fa0-4e09-bda8-0d40af74974b'
 
-export { classifiedCsv, scorecardReport }
+export { classifiedCsv, directionCsv, directionReport, movementCsv, movementReport, scorecardReport }
+
+/** The result files the dashboard downloads, by artifact path, as the real run wrote them. */
+export const RESULT_FILES: Readonly<Record<string, string>> = {
+  'results/classified_strike_candidates.csv': classifiedCsv,
+  'results/opponent_direction_analysis.csv': directionCsv,
+  'results/movement_metrics_cleaned.csv': movementCsv,
+  'results/movement_report.txt': movementReport,
+}
 
 /** GET /jobs/{id} once the run had finished (the job's real status.json). */
 export const COMPLETED_STATUS = {
