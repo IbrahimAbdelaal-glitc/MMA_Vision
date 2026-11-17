@@ -314,6 +314,50 @@ Measured after the change, 6 s clip at 1x (`live.realcheck`): CUDA graph,
 `test_12_analysed_frames_per_second_is_reported_inactive_not_active`,
 `test_30_analysed_frames_per_second_still_detects_the_punches`.
 
+## Lean inference path (2026-11-17)
+
+Design: `docs/superpowers/specs/2026-11-17-live-lean-inference-design.md`.
+After warm-up (still through `model.track()`, which builds the predictor,
+letterbox, ByteTrack and CUDA graph), each real frame goes through
+`live/inference.py` `lean_track`: the predictor's own preprocess and graphed
+inference, one copy of the raw predictions to the CPU, ultralytics' NMS and
+box/keypoint scaling on the CPU with the predictor's own arguments, the
+configured ByteTrack, and the same edge clipping `Results.update` applies.
+Results objects and callbacks are skipped. `YoloModel(lean=False)` keeps
+`model.track()` for comparison.
+
+Parity (user accepted CPU vs GPU float rounding): same people, tracker IDs
+and order on every frame of both real clips, boxes and keypoints within
+0.001 (`tests/test_live_lean.py`). The test caught the edge clipping, which
+the first version missed (69.6 px at the frame edge).
+
+| 6 s clip, every 3rd frame, alternating runs | median | p90 |
+|---|---|---|
+| `model.track()` (graphed) | 77.4 ms | 97.6 ms |
+| Lean path | **33.9 ms** | 56.3 ms |
+
+**1x is capped at 10 analysed frames per second by the clock, not by
+inference.** The engine never analyses past the last browser clock
+(design 8) and picks the newest frame at or before it; the browser and
+`live.realcheck` send the clock every 100 ms (design: "every 100-250 ms
+while playing"). So at most one new frame becomes eligible per 100 ms.
+Measured with the lean path: `live.realcheck` 1x 60 analysed / 300 skipped
+(10.0 per second of video), browser 10.0 /s after start-up; both inactive
+with the 20 /s reason, 0 events. Every 1x run since the CUDA graph
+settled at about 10 /s; start-up readings up to 12.9 /s come from the extra
+clocks the browser sends on play/playing/seeked events and the short
+initial rate window. 0.1x unchanged: 59.5 /s, 24 events, 19 matched
+offline, identity agree. GPU memory (whole device, `nvidia-smi`): baseline
+101 MiB before the session, peak 376 MiB, 101 MiB after exit and at the
+hand-off, with no Python process listed (only Figma). The engine released
+everything it used; the 101 MiB was already in use before it started.
+
+The parity guard needs the two real clips in `jobs/`, which git ignores; on
+a machine without them it skips. ultralytics is not pinned in
+`requirements.txt` (changing dependency files needs the user's approval),
+so after an ultralytics upgrade run `tests/test_live_lean.py` where the clips
+exist before trusting the lean path.
+
 ## Known limitations
 
 - **Drift rejection is verified on one constructed real file.** The
@@ -326,9 +370,10 @@ Measured after the change, 6 s clip at 1x (`live.realcheck`): CUDA graph,
   analysed frames per second (the rate the 0.05 s limb-speed gap needs),
   detection is reported inactive with the reason. With CUDA graph
   inference this laptop reaches about 9-13 analysed fps at 1x (4.5
-  before), so **normal-speed live event detection does not run on this
-  hardware**, and the dashboard now says so. Slower playback (0.1x) or
-  faster pre/post-processing is needed.
+  before), so **normal-speed live event detection does not run**, and the
+  dashboard says so. The limit is now the 100 ms clock interval (one new
+  frame per clock, at most 10 /s at 1x), not inference (lean path about
+  34 ms per frame). Slower playback (0.1x) works.
 - **Overlay hidden during playback** (see Decisions): exact when paused.
 - **Live event peaks are one frame (16.7 ms) late** relative to offline, on
   every matched event, as design 10.4 predicts from the trailing smoothing

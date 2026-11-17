@@ -358,7 +358,7 @@ class CvCapture:
 
 
 class YoloModel:
-    def __init__(self, device: str, use_graph: bool = True):
+    def __init__(self, device: str, use_graph: bool = True, lean: bool = True):
         from ultralytics import YOLO
 
         self.model = YOLO(str(ROOT / "models" / K.MODEL_FILE))
@@ -367,6 +367,7 @@ class YoloModel:
         self.inference = "eager"                 # "cuda_graph" once a graph is captured
         self.inference_error: Optional[str] = None
         self._hook = None                        # the GraphedForward, once installed
+        self.lean = lean                         # real frames skip model.track() (design 2026-11-17-live-lean-inference)
 
     def warm_up(self, width: int, height: int) -> float:
         """Throwaway inferences on a blank frame of the video's size, before
@@ -374,7 +375,9 @@ class YoloModel:
         predictor; on CUDA the second captures the network forward as a CUDA
         Graph (design 2026-11-17-live-cuda-graph), at exactly the letterboxed
         shape every real frame will have. Then ByteTrack is reset so the first
-        real frame still gets tracker IDs 1 and 2, as offline. Returns seconds."""
+        real frame still gets tracker IDs 1 and 2, as offline. Warm-up always
+        goes through model.track(): that is what builds the predictor, its
+        letterbox and its ByteTrack, which the lean path then reuses. Returns seconds."""
 
         import numpy as np
 
@@ -382,14 +385,14 @@ class YoloModel:
 
         started = time.perf_counter()
         blank = np.zeros((height, width, 3), dtype=np.uint8)
-        self(blank)
+        self._full(blank)
         if self.use_graph and str(self.device).startswith("cuda"):
             backend = self.model.predictor.model.backend
             hook = GraphedForward(backend.forward)
             backend.forward = hook
             self._hook = hook
             hook.arm()
-            self(blank)
+            self._full(blank)
             if hook.graph_ready:
                 self.inference = "cuda_graph"
             else:
@@ -399,13 +402,23 @@ class YoloModel:
         return time.perf_counter() - started
 
     def __call__(self, frame) -> list:
-        result = self.model.track(frame, persist=True, classes=[0], conf=K.MODEL_CONF,
-                                  imgsz=K.MODEL_IMGSZ, device=self.device,
-                                  tracker=K.MODEL_TRACKER, verbose=False)[0]
+        if self.lean and getattr(self.model, "predictor", None) is not None:
+            from live.inference import lean_track
+
+            people = lean_track(self.model.predictor, frame)
+        else:
+            people = self._full(frame)
         if self.inference == "cuda_graph" and not self._hook.graph_ready:
             self.inference = "eager"             # never keep reporting a graph that was retired
             self.inference_error = self._hook.error
             print(f"CUDA graph retired: {self._hook.error}", file=sys.stderr, flush=True)
+        return people
+
+    def _full(self, frame) -> list:
+        """ultralytics' own model.track(): warm-up, and the reference the lean path is tested against."""
+        result = self.model.track(frame, persist=True, classes=[0], conf=K.MODEL_CONF,
+                                  imgsz=K.MODEL_IMGSZ, device=self.device,
+                                  tracker=K.MODEL_TRACKER, verbose=False)[0]
         if result.boxes is None or result.boxes.id is None or result.keypoints is None:
             return []
         ids = result.boxes.id.int().cpu().tolist()
