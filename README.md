@@ -268,11 +268,17 @@ Accuracy can only be measured against people's labels. The tools:
    Duplicate / Uncertain, set the true peak time, add every missed movement,
    tick *I searched the whole video for missed events*, and export JSON.
 2. **Metrics for that list**: `python -m evaluation.metrics review.json`.
-3. **Compare detectors on the same labels**: put the export in
-   `validation\datasets\<clip>\truth.json` (create the folder with
-   `python -m evaluation.score init --video C:\path\to\clip.mp4 --name <clip>`),
-   event lists in its `detections\`, then
+3. **Compare detectors on the same labels**: create the clip folder with
+   `python -m evaluation.score init --video C:\path\to\clip.mp4 --name <clip> --copy`,
+   put event lists in its `detections\`, run
+   `python -m evaluation.score review-list validation\datasets\<clip>`, and
+   review that blind `review_list.csv` (all detectors' events in one list).
+   Export the review as `validation\datasets\<clip>\truth.json`, then run
    `python -m evaluation.score dataset validation\datasets`.
+
+How to label consistently (what counts as a strike, which verdict when):
+[docs/labelling.md](docs/labelling.md). The two local clips are already set
+up in `validation\datasets\` (`clip06s`, `clip15s`) and waiting to be labelled.
 
 Precision, recall, F1, false positives per minute, duplicates, missed events
 and timing error are reported overall, per fighter and per type. Below 100

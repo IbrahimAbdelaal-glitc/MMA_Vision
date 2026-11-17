@@ -159,3 +159,91 @@ def test_cli_refuses_an_incomplete_truth(tmp_path, capsys):
 
     assert main(["file", "--truth", str(tmp_path / "truth.json"), "--detections", str(tmp_path / "d.csv")]) == 2
     assert "Cannot score" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------- review list
+from evaluation.score import MERGE_SECONDS, REVIEW_LIST, review_list, write_review_list  # noqa: E402
+
+LIVE = ["corner", "side", "type", "peak_t"]
+OFFLINE = ["fighter", "limb", "event_type", "peak_time"]
+
+
+def rows_of(result):
+    return [(r["t"], r["fighter"], r["side"], r["type"]) for r in result]
+
+
+def test_one_movement_found_by_several_detectors_is_one_row(tmp_path):
+    write_csv(tmp_path / "live.csv", LIVE, [["blue", "right", "punch-like", "1.00"]])
+    write_csv(tmp_path / "offline.csv", OFFLINE, [["blue", "right", "punch-like", "1.10"]])
+
+    assert rows_of(review_list([tmp_path / "live.csv", tmp_path / "offline.csv"])) == [
+        (1.05, "blue", "right", "punch-like")]
+
+
+def test_rows_are_never_merged_across_side_type_or_fighter(tmp_path):
+    # A two-arm pair, a punch thrown with a kick, and the other fighter: all stay separate.
+    write_csv(tmp_path / "a.csv", LIVE, [["blue", "right", "punch-like", "2.00"],
+                                         ["blue", "left", "punch-like", "2.05"],
+                                         ["blue", "right", "kick-like", "2.00"],
+                                         ["red", "right", "punch-like", "2.00"]])
+
+    assert len(review_list([tmp_path / "a.csv"])) == 4
+
+
+def test_a_fast_one_two_on_one_side_stays_two_rows(tmp_path):
+    write_csv(tmp_path / "a.csv", LIVE, [["blue", "right", "punch-like", "3.00"],
+                                         ["blue", "right", "punch-like", "3.20"]])
+
+    assert len(review_list([tmp_path / "a.csv"])) == 2
+
+
+def test_merging_is_anchored_so_a_chain_does_not_grow_past_the_window(tmp_path):
+    # 0.00, 0.10, 0.20: the third is 0.20 from the first, so a new row starts.
+    write_csv(tmp_path / "a.csv", LIVE, [["red", "left", "kick-like", t] for t in ("5.00", "5.10", "5.20")])
+
+    assert rows_of(review_list([tmp_path / "a.csv"])) == [(5.05, "red", "left", "kick-like"),
+                                                         (5.2, "red", "left", "kick-like")]
+
+
+def test_unmatched_offline_rows_of_a_replay_are_left_out(tmp_path):
+    write_csv(tmp_path / "replay.csv", LIVE + ["offline_match"],
+              [["blue", "right", "punch-like", "1.0", "matched"], ["red", "left", "kick-like", "4.0", "offline_only"]])
+
+    assert rows_of(review_list([tmp_path / "replay.csv"])) == [(1.0, "blue", "right", "punch-like")]
+
+
+def test_a_review_of_the_list_covers_every_detector(tmp_path):
+    # If every row is a real movement, no detector event may count as a false
+    # positive: each merged row lies within TOLERANCE of every event it stands for.
+    clip = tmp_path / "clip"
+    (clip / "detections").mkdir(parents=True)
+    live = [["blue", "right", "punch-like", f"{1 + k * 0.7:.3f}"] for k in range(10)]
+    offline = [["blue", "right", "punch-like", f"{1 + k * 0.7 + 0.14:.3f}"] for k in range(10)]
+    offline.append(["red", "left", "kick-like", "9.5"])
+    write_csv(clip / "detections" / "live.csv", LIVE, live)
+    write_csv(clip / "detections" / "offline.csv", OFFLINE, offline)
+
+    target, rows, files = write_review_list(clip)
+    events = [{**ev(r["t"], r["fighter"], r["type"]), "side": r["side"]} for r in rows]
+    (clip / "truth.json").write_text(json.dumps(review(events, duration=60.0)), encoding="utf-8")
+    out = score_dataset(tmp_path)
+
+    assert target == clip / REVIEW_LIST and not (clip / "detections" / REVIEW_LIST).exists()
+    assert len(rows) == 11 and MERGE_SECONDS < 0.25
+    for name in ("live", "offline"):
+        overall = out["detectors"][name]["overall"]
+        assert overall["false_positives"] == 0 and overall["duplicates"] == 0
+    assert out["detectors"]["offline"]["overall"]["recall"] == pytest.approx(1.0)
+    assert out["detectors"]["live"]["overall"]["missed"] == 1        # the kick only offline found
+
+
+def test_cli_writes_the_review_list_and_refuses_an_empty_clip(tmp_path, capsys):
+    clip = tmp_path / "clip"
+    (clip / "detections").mkdir(parents=True)
+    assert main(["review-list", str(clip)]) == 2
+
+    write_csv(clip / "detections" / "live.csv", LIVE, [["blue", "right", "punch-like", "1.0"]])
+    assert main(["review-list", str(clip)]) == 0
+    assert "1 rows to review from 1 events" in capsys.readouterr().out
+    with (clip / REVIEW_LIST).open(encoding="utf-8") as handle:
+        assert next(csv.reader(handle)) == ["t", "fighter", "side", "type"]
