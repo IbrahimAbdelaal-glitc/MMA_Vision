@@ -1,7 +1,9 @@
 import csv
 import json
 import os
+import shutil
 import sys
+import threading
 import uuid
 import subprocess
 
@@ -122,6 +124,12 @@ def run_pipeline(job_id: str):
     env["MMA_VIDEO_PATH"] = str(video_path.resolve())
     env["MMA_RESULTS_DIR"] = str(results_dir.resolve())
     env["MMA_OUTPUT_DIR"] = str(videos_dir.resolve())
+
+    # Python buffers its output in 8 KB blocks when it writes to a pipe, so
+    # pipeline.py's "RUNNING:" / "COMPLETED:" markers only reached the loop
+    # below when the whole run ended. Unbuffered output sends each line as it
+    # is printed. pipeline.py passes this environment on to every stage.
+    env["PYTHONUNBUFFERED"] = "1"
 
     log_file = job_dir / "pipeline.log"
 
@@ -476,3 +484,139 @@ def download_artifact(job_id: str, file_path: str):
         path=requested_file,
         filename=requested_file.name
     )
+
+
+# ============================================================
+# BROWSER-PLAYABLE PROCESSED VIDEO
+# ============================================================
+#
+# movement_analysis.py writes its annotated video with OpenCV's mp4v codec
+# (MPEG-4 Part 2), which Chrome, Edge and Firefox cannot play. This endpoint
+# serves an H.264 copy, made with ffmpeg the first time it is asked for and
+# kept in the job's browser/ folder. That folder is outside results/ and
+# videos/, so /artifacts and /files return exactly what they did before.
+
+PROCESSED_VIDEO = Path("videos") / "movement_analysis.mp4"
+BROWSER_VIDEO = Path("browser") / "movement_analysis_h264.mp4"
+CONVERSION_TIMEOUT_SECONDS = 30 * 60
+
+_conversion_locks: dict = {}
+_conversion_locks_guard = threading.Lock()
+
+
+def find_ffmpeg() -> Optional[str]:
+    """MMA_FFMPEG if it is set, otherwise the ffmpeg on PATH."""
+
+    configured = os.environ.get("MMA_FFMPEG")
+
+    if configured:
+        return configured if Path(configured).is_file() else None
+
+    return shutil.which("ffmpeg")
+
+
+def conversion_lock(job_id: str) -> threading.Lock:
+    """One lock per job, so two requests never convert the same video at once."""
+
+    with _conversion_locks_guard:
+        return _conversion_locks.setdefault(job_id, threading.Lock())
+
+
+def convert_to_h264(source: Path, target: Path):
+
+    ffmpeg = find_ffmpeg()
+
+    if ffmpeg is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No ffmpeg was found to make a browser-playable copy. "
+                "Install ffmpeg or set MMA_FFMPEG to its path."
+            )
+        )
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    # Written under a temporary name and renamed when complete, so a
+    # half-written file is never served.
+    temp_file = target.with_name(target.stem + ".partial.mp4")
+
+    try:
+        result = subprocess.run(
+            [
+                ffmpeg, "-y", "-loglevel", "error",
+                "-i", str(source),
+                "-an",                       # the processed video has no audio
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-crf", "23",
+                "-pix_fmt", "yuv420p",       # the pixel format browsers decode
+                "-movflags", "+faststart",   # index first, so playback starts at once
+                str(temp_file)
+            ],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=CONVERSION_TIMEOUT_SECONDS
+        )
+        if result.returncode == 0 and temp_file.is_file():
+            failure = None
+        else:
+            # ffmpeg's last line of output usually names the problem.
+            lines = (result.stderr or "").strip().splitlines()
+            failure = lines[-1] if lines else f"ffmpeg exited with code {result.returncode}"
+
+    except (OSError, subprocess.TimeoutExpired) as error:
+        failure = str(error)
+
+    if failure is not None:
+
+        temp_file.unlink(missing_ok=True)
+
+        if not any(target.parent.iterdir()):
+            target.parent.rmdir()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not convert the processed video: {failure}"
+        )
+
+    temp_file.replace(target)
+
+
+@app.get("/jobs/{job_id}/video")
+def get_browser_video(job_id: str):
+
+    job_dir = get_job_directory(job_id)
+
+    status = get_status(job_dir)
+
+    if status["status"] != "completed":
+
+        raise HTTPException(
+            status_code=409,
+            detail=f"Analysis is not complete. Current status: {status['status']}"
+        )
+
+    source = job_dir / PROCESSED_VIDEO
+    target = job_dir / BROWSER_VIDEO
+
+    if not source.is_file():
+
+        raise HTTPException(
+            status_code=404,
+            detail="Processed video not found."
+        )
+
+    with conversion_lock(job_dir.name):
+
+        # Made again if the processed video is newer than the copy.
+        if (
+            not target.is_file()
+            or target.stat().st_mtime < source.stat().st_mtime
+        ):
+            convert_to_h264(source, target)
+
+    # No filename, so the browser plays it in the page instead of
+    # downloading it. FileResponse answers Range requests, which seeking needs.
+    return FileResponse(path=target, media_type="video/mp4")
