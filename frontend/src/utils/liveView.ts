@@ -1,5 +1,6 @@
 import type { Corner, FighterTally, StrikeEvent } from '../types/dashboard'
-import type { InferencePath, LiveEvent } from '../types/live'
+import type { InferencePath, LiveEvent, LiveStats } from '../types/live'
+import { formatMeasure } from './format'
 
 /*
  * Live engine events in the shapes the dashboard panels already show.
@@ -39,4 +40,29 @@ export function engineLocation(device: string | null, inference: InferencePath |
   if (device) text = device === 'cpu' ? ' · CPU' : ` · GPU (${device})`
   if (inference) text += inference === 'cuda_graph' ? ' · CUDA graph' : ' · standard inference'
   return text
+}
+
+/**
+ * One line for the status bar: whether events can be detected (and why not),
+ * the analysed rate and where the engine runs. Used where the engine status
+ * block in the metrics panel has no room (short screens, overlay layout).
+ */
+export function engineStatusLine(
+  device: string | null,
+  inference: InferencePath | null,
+  stats: LiveStats | null,
+): { text: string; warn: boolean } | null {
+  if (!stats && !device) return null
+  const parts: string[] = []
+  if (stats) {
+    parts.push(
+      stats.detectionActive
+        ? 'Detection active'
+        : `Detection inactive: ${stats.detectionInactiveReason ?? 'not enough analysed frames'}`,
+    )
+    if (stats.analysedRate != null) parts.push(`${formatMeasure(stats.analysedRate, 1)} frames/s`)
+  }
+  const where = engineLocation(device, inference).replace(/^ · /, '')
+  if (where) parts.push(where)
+  return { text: parts.join(' · '), warn: stats !== null && !stats.detectionActive }
 }

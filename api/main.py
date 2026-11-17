@@ -14,6 +14,8 @@ from typing import Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 
+from live.atomic import replace_retrying
+
 
 # ============================================================
 # CONFIGURATION
@@ -99,7 +101,7 @@ def update_status(job_dir: Path, **updates):
         encoding="utf-8"
     )
 
-    temp_file.replace(status_file)
+    replace_retrying(temp_file, status_file)
 
 
 # ============================================================
@@ -261,6 +263,17 @@ async def create_job(
             detail="Only MP4 videos are supported."
         )
 
+    # The live engine and the pipeline never use the GPU at the same time
+    # (live sessions are refused while a job runs; this is the other side).
+    if live_session_active():
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A live session is running. End it before starting an "
+                "offline analysis: one analysis uses the GPU at a time."
+            )
+        )
+
     job_id = str(uuid.uuid4())
 
     job_dir = JOBS_DIR / job_id
@@ -334,15 +347,26 @@ async def create_job(
 _active_jobs: set = set()
 _active_jobs_guard = threading.Lock()
 
+# One pipeline runs at a time: pose estimation uses the GPU when there is one
+# (src/pose_pass.py), and two passes at once would compete for its memory.
+# A later job waits, with status "queued", until the earlier one ends.
+_pipeline_slot = threading.Lock()
+
 
 def offline_job_active() -> bool:
     with _active_jobs_guard:
         return bool(_active_jobs)
 
 
+def live_session_active() -> bool:
+    from api import live_api   # imported lazily: live_api imports this module
+    return live_api.manager.busy()
+
+
 def _run_tracked(job_id: str):
     try:
-        run_pipeline(job_id)
+        with _pipeline_slot:
+            run_pipeline(job_id)
     finally:
         with _active_jobs_guard:
             _active_jobs.discard(job_id)
@@ -631,7 +655,7 @@ def convert_to_h264(source: Path, target: Path):
             detail=f"Could not convert the processed video: {failure}"
         )
 
-    temp_file.replace(target)
+    replace_retrying(temp_file, target)
 
 
 @app.get("/jobs/{job_id}/video")

@@ -68,7 +68,7 @@ describe('reading a job from the backend', () => {
   })
 
   it('refuses an answer that is not JSON', async () => {
-    backend.addJob(JOB_ID, { statuses: [textReply(200, '<!doctype html>')] })
+    backend.addJob(JOB_ID, { statuses: [textReply(200, 'OK, not JSON')] })
 
     await expect(getJobStatus(JOB_ID)).rejects.toMatchObject({ kind: 'invalid-response' })
   })
