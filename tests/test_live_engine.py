@@ -237,8 +237,29 @@ def test_slow_analysis_inactivates_detection_and_gives_no_events():
     assert of(messages, "event") == []
     stats = core.stats()
     assert stats["detection_active"] is False
-    assert "below 10" in stats["detection_inactive_reason"]
+    assert "below 20" in stats["detection_inactive_reason"]
     assert stats["frames_skipped"] > 0
+
+
+def test_12_analysed_frames_per_second_is_reported_inactive_not_active():
+    """What 1x reached on this laptop with the CUDA graph: frames about 5 apart
+    at 60 fps, so limb speed is never measured. Reporting that as active
+    claimed detection that could not happen."""
+    n = int(3.6 * FPS)
+    core, messages, clock = make(n=n, punches=FIVE_PUNCHES)
+    play_through(core, clock, n, step_frames=5)       # 12 analysed frames per second
+    assert of(messages, "event") == []
+    stats = core.stats()
+    assert stats["detection_active"] is False
+    assert "below 20" in stats["detection_inactive_reason"]
+
+
+def test_30_analysed_frames_per_second_still_detects_the_punches():
+    n = int(6 * FPS)
+    core, messages, clock = make(n=n, punches=FIVE_PUNCHES)
+    play_through(core, clock, n, step_frames=2)       # 30 analysed frames per second
+    assert core.stats()["detection_active"] is True
+    assert len(of(messages, "event")) > 0
 
 
 def test_timing_mismatch_stops_with_an_error_and_exit_code_3():

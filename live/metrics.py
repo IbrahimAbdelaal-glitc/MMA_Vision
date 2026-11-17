@@ -68,7 +68,8 @@ class RateMeter:
             return False, None, "measuring the analysed rate"
         rate = (len(self.times) - 1) / window
         if rate < K.MIN_ANALYSED_RATE:
-            return False, rate, f"analysed rate {rate:.1f} frames/s is below {K.MIN_ANALYSED_RATE:.0f}"
+            return False, rate, (f"analysed rate {rate:.1f} frames/s is below {K.MIN_ANALYSED_RATE:.0f}, "
+                                 f"the rate limb speed needs (a sample every {K.LIMB_SPEED_MAX_GAP:.2f} s)")
         return True, rate, None
 
 
