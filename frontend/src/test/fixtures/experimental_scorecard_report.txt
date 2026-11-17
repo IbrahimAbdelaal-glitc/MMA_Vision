@@ -1,0 +1,42 @@
+================================================
+       MMA VISION - EXPERIMENTAL SCORECARD
+================================================
+
+SCORING RULES
+------------------------------------------------
+Very Strong event: 3 points
+Strong event:      2 points
+Review event:      0 points
+Low event:         0 points
+
+FIGHTER COMPARISON
+------------------------------------------------
+
+                 BLUE          RED
+
+Total Events     3             8
+Punch-like       3             5
+Kick-like        0             3
+Strong           1             7
+Very Strong      2             1
+
+------------------------------------------------
+EXPERIMENTAL STRIKE ACTIVITY SCORE
+
+BLUE: 8
+RED:  17
+
+RED has the higher experimental strike activity score.
+
+================================================
+IMPORTANT NOTE
+================================================
+This scorecard summarizes computer-vision strike
+activity candidates using heuristic classifications.
+
+It does not confirm physical contact, damage, or
+official MMA judging criteria.
+
+This is an experimental analysis tool, not an
+official fight result.
+================================================

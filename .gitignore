@@ -4,9 +4,11 @@ __pycache__/
 
 # Generated analysis outputs and uploaded videos.
 # They stay on disk; they are just not version-controlled.
-jobs/
-results/
-videos/
+# The leading slash matches only the project-root folders, so folders with
+# these names elsewhere (for example inside frontend/) are still tracked.
+/jobs/
+/results/
+/videos/
 
 # Frontend
 node_modules/
@@ -18,3 +20,6 @@ dist/
 .idea/
 Thumbs.db
 .DS_Store
+
+# Live sessions: uploads and engine output while a session runs.
+/live_sessions/
