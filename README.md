@@ -292,4 +292,11 @@ yet established. Details, and what has been measured so far:
 ultralytics (AGPL-3.0), PyTorch (BSD-3-Clause), OpenCV (Apache-2.0), FastAPI
 (MIT), Uvicorn (BSD-3-Clause), pandas, NumPy, Matplotlib; React (MIT), Vite (MIT),
 Tailwind CSS (MIT), lucide-react (ISC). ffmpeg/ffprobe (LGPL/GPL, used as
-external programs). This repository has no licence file of its own yet.
+external programs).
+
+## Licence
+
+MMA Vision is licensed under the GNU Affero General Public License v3.0
+([LICENSE](LICENSE)), the licence of the Ultralytics package and YOLO models it
+builds on. If you run a modified version as a network service, the AGPL
+requires you to offer its source code to the service's users.
