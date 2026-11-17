@@ -1,4 +1,4 @@
-import type { DetectionClass } from './dashboard'
+import type { Corner, DetectionClass } from './dashboard'
 
 /*
  * What the MMA Vision API (api/main.py) sends, after the dashboard has checked
@@ -74,6 +74,102 @@ export interface Classification {
   unrecognisedRows: number
 }
 
+/**
+ * One strike-like movement candidate, as the classification stage wrote it to
+ * classified_strike_candidates.csv. It is an estimated movement, not a
+ * confirmed landed strike.
+ */
+export interface CandidateEvent {
+  /** "event-<row>", the event's data row in the file: unique within the job. */
+  id: string
+  corner: Corner
+  detectionClass: DetectionClass
+  /** "punch-like" or "kick-like", as written by the pipeline. */
+  eventType: string
+  /** "left" or "right": the side of the wrist (punch-like) or ankle (kick-like) that moved. */
+  side: string
+  /** Seconds from the start of the video: frame number divided by the video's frame rate. */
+  startTime: number | null
+  peakTime: number | null
+  endTime: number | null
+  /** Speed of the wrist or ankle at the peak, in pixels per second. */
+  peakSpeed: number | null
+  /** Mean pose keypoint confidence for the limb, from 0 to 1. */
+  keypointConfidence: number | null
+  /** Heuristic ranking from 0 to 100. It is not a probability. */
+  kinematicScore: number | null
+}
+
+export interface CandidateEvents {
+  /** In file order. */
+  events: CandidateEvent[]
+  /** Rows left out because their fighter or class was not recognised. */
+  unrecognisedRows: number
+}
+
+/** One row of opponent_direction_analysis.csv: an event and how it moved relative to the opponent. */
+export interface DirectionRow extends Omit<CandidateEvent, 'id'> {
+  /**
+   * How much closer the wrist or ankle came to the opponent's torso centre,
+   * in pixels, from 8–3 frames before the peak to the peak. Negative: farther away.
+   */
+  approachChange: number | null
+  /** Cosine of the angle between the limb's movement and the direction to the opponent: +1 toward, 0 sideways, −1 away. */
+  alignment: number | null
+  /** Frames, of the 12 examined, in which both the limb and the opponent's torso were visible. */
+  validSamples: number | null
+}
+
+export interface DirectionData {
+  rows: DirectionRow[]
+  unrecognisedRows: number
+}
+
+/**
+ * The per-frame series the backend's four movement charts plot, from
+ * movement_metrics_cleaned.csv. null is a frame without a value.
+ */
+export interface MovementSeries {
+  /** Seconds from the start of the video, one per frame. */
+  time: number[]
+  /** Speed of each fighter's bounding-box centre, smoothed by the backend (px/s). */
+  blueSpeed: Array<number | null>
+  redSpeed: Array<number | null>
+  /** Wrist speed, smoothed by the backend (px/s). */
+  blueWrist: Array<number | null>
+  redWrist: Array<number | null>
+  /** Distance between the two bounding-box centres, smoothed by the backend (px). */
+  distance: Array<number | null>
+  /** Distance each bounding-box centre has travelled since the first frame (px). */
+  blueTotal: Array<number | null>
+  redTotal: Array<number | null>
+  /** Rows left out because their time could not be read. */
+  skippedRows: number
+}
+
+export interface SpeedFigures {
+  median: number | null
+  /** 95th percentile. */
+  p95: number | null
+}
+
+export interface FighterMovement {
+  movementSpeed: SpeedFigures
+  wristSpeed: SpeedFigures
+  ankleSpeed: SpeedFigures
+  totalMovementPx: number | null
+}
+
+/** The figures of movement_report.txt, exactly as the backend computed them. */
+export interface MovementReport {
+  frames: number | null
+  /** The time of the last analysed frame, as the report gives it. */
+  durationSeconds: number | null
+  blue: FighterMovement
+  red: FighterMovement
+  distance: { averagePx: number | null; minimumPx: number | null; maximumPx: number | null }
+}
+
 /** One part of a completed job's analysis. Each part loads, or fails, on its own. */
 export type Part<T> =
   | { state: 'ready'; data: T }
@@ -84,4 +180,9 @@ export interface AnalysisData {
   results: Part<JobResults>
   artifacts: Part<Artifact[]>
   classification: Part<Classification>
+  /** The same file as the class counts, read as a list of events. */
+  events: Part<CandidateEvents>
+  direction: Part<DirectionData>
+  movement: Part<MovementSeries>
+  movementReport: Part<MovementReport>
 }

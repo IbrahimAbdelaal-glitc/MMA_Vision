@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { formatClock, formatCount, formatDuration, formatFileSize, formatMeasure } from './format'
+import {
+  formatClock,
+  formatCount,
+  formatDuration,
+  formatFileSize,
+  formatGrouped,
+  formatMeasure,
+  formatSigned,
+} from './format'
 
 describe('formatClock', () => {
   it.each([
@@ -88,5 +96,38 @@ describe('formatFileSize', () => {
     [1610612736, '1.5 GB'],
   ])('formats %s bytes as %s', (bytes, want) => {
     expect(formatFileSize(bytes)).toBe(want)
+  })
+})
+
+describe('formatGrouped', () => {
+  it.each([
+    [2748.7687, 0, '2,749'],
+    [3619.37, 2, '3,619.37'],
+    [151.73, 2, '151.73'],
+    [402.8, 2, '402.80'],
+    [15230609, 0, '15,230,609'],
+  ])('shows %s with %s decimals and thousands separators as %s', (value, decimals, want) => {
+    expect(formatGrouped(value, decimals)).toBe(want)
+  })
+
+  it.each([null, undefined, Number.NaN])('shows a dash for %s', (value) => {
+    expect(formatGrouped(value, 2)).toBe('—')
+  })
+})
+
+describe('formatSigned', () => {
+  it.each([
+    [0.2518, 3, '+0.252'],
+    [-0.3394, 3, '−0.339'],
+    [-80.964, 2, '−80.96'],
+    [0, 3, '0.000'],
+    // Rounds to zero: no sign, so it cannot read as a direction.
+    [-0.0004, 3, '0.000'],
+  ])('shows %s with %s decimals as %s', (value, decimals, want) => {
+    expect(formatSigned(value, decimals)).toBe(want)
+  })
+
+  it.each([null, undefined, Number.NaN])('shows a dash for %s', (value) => {
+    expect(formatSigned(value, 3)).toBe('—')
   })
 })

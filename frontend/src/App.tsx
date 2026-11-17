@@ -24,6 +24,7 @@ import { StageNotice } from './components/video/StageLabels'
 import { useAnalysisJob } from './hooks/useAnalysisJob'
 import { useBackendHealth } from './hooks/useBackendHealth'
 import { useLocalVideo } from './hooks/useLocalVideo'
+import { useReplayVideo } from './hooks/useReplayVideo'
 import type { DashboardView } from './types/dashboard'
 import { cx } from './utils/cx'
 
@@ -47,6 +48,9 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null)
 
   const job = analysis.state
+  // Kept here, not in Match Ended, so a copy chosen for the replay survives
+  // switching to Live Monitoring and back.
+  const replay = useReplayVideo(job)
   const source = localVideo.source
   const live = view === 'live'
   const focus = stageFocus(job, source)
@@ -149,7 +153,13 @@ export default function App() {
               onDropFile={onDropFile}
             />
           ) : (
-            <MatchEnded job={job} onRetry={analysis.retryAnalysis} />
+            // A different job starts with nothing selected and the default views.
+            <MatchEnded
+              key={job.jobId ?? 'no-job'}
+              job={job}
+              replay={replay}
+              onRetry={analysis.retryAnalysis}
+            />
           )}
         </div>
       </main>

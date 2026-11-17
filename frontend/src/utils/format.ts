@@ -47,6 +47,27 @@ export function formatMeasure(value: number | null | undefined, decimals: number
   return value.toFixed(decimals)
 }
 
+/** A measurement with thousands separators ("3,619.37"), or a dash when it was never measured. */
+export function formatGrouped(value: number | null | undefined, decimals: number): string {
+  if (value == null || !Number.isFinite(value)) return BLANK
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+}
+
+/**
+ * A value whose sign is the point, such as a direction: "+0.252" or "−0.339"
+ * with a true minus sign. A value that rounds to zero has no sign, so it
+ * cannot read as a direction it does not have.
+ */
+export function formatSigned(value: number | null | undefined, decimals: number): string {
+  if (value == null || !Number.isFinite(value)) return BLANK
+  const magnitude = Math.abs(value).toFixed(decimals)
+  if (Number(magnitude) === 0) return magnitude
+  return `${value > 0 ? '+' : '−'}${magnitude}`
+}
+
 /**
  * A length of time in whole seconds: "MM:SS", or "H:MM:SS" from one hour up.
  * An unknown or impossible duration shows as a blank, not as zero.
