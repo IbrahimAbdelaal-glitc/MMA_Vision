@@ -1,5 +1,5 @@
 import type { Corner, FighterTally, StrikeEvent } from '../types/dashboard'
-import type { LiveEvent } from '../types/live'
+import type { InferencePath, LiveEvent } from '../types/live'
 
 /*
  * Live engine events in the shapes the dashboard panels already show.
@@ -30,4 +30,13 @@ export function toStrikeEvent(event: LiveEvent): StrikeEvent {
     keypointConfidence: event.keypointConfidence,
     provisional: true,
   }
+}
+
+/** The engine-status suffix: where the engine runs and which inference path ran,
+ * so a fallback from the CUDA graph is never silent. Unknown parts are left out. */
+export function engineLocation(device: string | null, inference: InferencePath | null): string {
+  let text = ''
+  if (device) text = device === 'cpu' ? ' · CPU' : ` · GPU (${device})`
+  if (inference) text += inference === 'cuda_graph' ? ' · CUDA graph' : ' · standard inference'
+  return text
 }

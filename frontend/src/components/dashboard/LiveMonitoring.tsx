@@ -93,6 +93,7 @@ export function LiveMonitoring({
           playing={clock.playing}
           connection={state.connection}
           device={state.device}
+          inference={state.inference}
           stats={state.stats}
           endReason={state.endReason}
           onStart={() => source && live.start(source.file)}

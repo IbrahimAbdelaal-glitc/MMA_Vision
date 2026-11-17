@@ -92,6 +92,16 @@ def play_through(core, clock, n, step_frames=1):
     return reason
 
 
+def test_ready_reports_the_inference_path():
+    """Design 2026-11-17-live-cuda-graph: a fallback to eager is never silent."""
+    core, messages, _ = make()
+    core.ready()
+    assert messages[0]["inference"] == "eager"                 # the default, as on CPU
+    core.inference = "cuda_graph"
+    core.ready()
+    assert messages[1]["inference"] == "cuda_graph"
+
+
 def test_ready_reports_device_and_video_and_every_message_is_provisional():
     core, messages, _ = make()
     core.ready()

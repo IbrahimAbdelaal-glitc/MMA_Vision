@@ -8,7 +8,7 @@ from live_synth import FIVE_PUNCHES
 from test_live_engine import FPS, make, play_through
 
 ALLOWED = {
-    "ready": {"type", "provisional", "device", "model", "video"},
+    "ready": {"type", "provisional", "device", "model", "inference", "video"},
     "frame": {"type", "provisional", "t", "frame_index", "corners", "metrics"},
     "event": {"type", "provisional", "corner", "side", "strike_type", "peak_t", "peak_frame",
               "smoothed_peak_speed", "extension_gain", "angle_gain", "retraction",
