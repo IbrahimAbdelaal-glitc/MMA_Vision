@@ -32,6 +32,7 @@ GATE_MIN_EXTENSION = 0.0            # refine_strikes.py:30
 GATE_MIN_ANGLE_GAIN = -5.0          # refine_strikes.py:31
 GATE_MIN_CONFIDENCE = 0.85          # refine_strikes.py:32
 DUPLICATE_GAP_SECONDS = 0.35        # refine_strikes.py:33
+CROSS_LEG_KICK_DUPLICATES = True    # refine_strikes.py CROSS_LEG_KICK_DUPLICATES: one kick moves both ankles
 CLASS_VERY_STRONG = 80.0            # filter_strikes.py:26
 CLASS_STRONG = 65.0                 # filter_strikes.py:28 (also the scorecard count, :37)
 CLASS_REVIEW = 50.0                 # filter_strikes.py:30

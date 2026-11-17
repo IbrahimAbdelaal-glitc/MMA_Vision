@@ -1,8 +1,11 @@
 import os
+import sys
 import cv2
 import csv
 from pathlib import Path
 from ultralytics import YOLO
+
+import pose_pass
 
 # Project paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,9 +36,22 @@ else:
 if not video_path.exists():
     raise FileNotFoundError(f"Input video not found: {video_path}")
 
+output_path = RESULTS_DIR / pose_pass.KEYPOINTS_CSV
+
+# Movement Analysis runs the same pose pass (model, settings, frames) and
+# writes these rows with a provenance record; reuse them instead of running
+# the model a second time (pose_pass.py).
+if pose_pass.reusable(RESULTS_DIR, video_path):
+    print(f"Processing: {video_path.name}")
+    print("\nReusing the pose pass of the Movement Analysis stage "
+          f"({pose_pass.PROVENANCE_JSON} matches this video, model and settings).")
+    print(f"Dataset: {output_path}")
+    sys.exit(0)
+
 # Load pose model
-MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "yolo11n-pose.pt"
+MODEL_PATH = pose_pass.MODEL_PATH
 model = YOLO(str(MODEL_PATH))
+DEVICE = pose_pass.select_device()
 
 # Confirmed fighter IDs from the previous test
 FIGHTERS = {
@@ -67,8 +83,6 @@ fps = cap.get(cv2.CAP_PROP_FPS)
 if fps <= 0:
     fps = 30
 
-output_path = RESULTS_DIR / "fighter_keypoints.csv"
-
 frame_number = 0
 rows = []
 
@@ -83,12 +97,9 @@ while True:
     results = model.track(
         frame,
         persist=True,
-        classes=[0],
-        conf=0.35,
-        imgsz=640,
-        device="cpu",
-        tracker="bytetrack.yaml",
-        verbose=False
+        device=DEVICE,
+        verbose=False,
+        **pose_pass.TRACK_SETTINGS
     )
 
     result = results[0]

@@ -5,6 +5,9 @@ import csv
 import numpy as np
 from ultralytics import YOLO
 
+from kinematics import box_center, step_speed
+import pose_pass
+
 # ==========================================
 # 1. PROJECT CONFIGURATION
 # ==========================================
@@ -73,11 +76,7 @@ if not video_path.exists():
 
 output_video = OUTPUT_DIR / "movement_analysis.mp4"
 output_csv = RESULTS_DIR / "movement_metrics.csv"
-
-print(f"Input video: {video_path.name}")
-
-output_video = OUTPUT_DIR / "movement_analysis.mp4"
-output_csv = RESULTS_DIR / "movement_metrics.csv"
+keypoints_csv = RESULTS_DIR / pose_pass.KEYPOINTS_CSV
 
 print(f"Input video: {video_path.name}")
 
@@ -85,8 +84,15 @@ print(f"Input video: {video_path.name}")
 # 3. LOAD MODEL AND VIDEO
 # ==========================================
 
-MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "yolo11n-pose.pt"
+MODEL_PATH = pose_pass.MODEL_PATH
 model = YOLO(str(MODEL_PATH))
+DEVICE = pose_pass.select_device()
+print(f"Device: {DEVICE}")
+
+# This pass also produces the keypoint rows of the Pose Estimation stage;
+# any record of an earlier pass is removed until this one has finished.
+(RESULTS_DIR / pose_pass.PROVENANCE_JSON).unlink(missing_ok=True)
+keypoint_rows = []
 
 cap = cv2.VideoCapture(str(video_path))
 
@@ -120,7 +126,7 @@ csv_rows = []
 # 5. HELPER FUNCTION
 # ==========================================
 
-def calculate_joint_speed(current, previous_points, indexes, fps):
+def calculate_joint_speed(current, previous_points, indexes, fps, frame_gap):
 
     speeds = []
 
@@ -138,7 +144,10 @@ def calculate_joint_speed(current, previous_points, indexes, fps):
                 current_point[:2] - previous_point[:2]
             )
 
-            speeds.append(distance * fps)
+            speed = step_speed(float(distance), frame_gap, fps)
+
+            if speed is not None:
+                speeds.append(speed)
 
     if speeds:
         return float(np.mean(speeds))
@@ -162,12 +171,9 @@ while cap.isOpened():
     results = model.track(
         frame,
         persist=True,
-        classes=[0],
-        conf=CONF_THRESHOLD,
-        imgsz=640,
-        device="cpu",
-        tracker="bytetrack.yaml",
-        verbose=False
+        device=DEVICE,
+        verbose=False,
+        **pose_pass.TRACK_SETTINGS
     )
 
     result = results[0]
@@ -188,6 +194,8 @@ while cap.isOpened():
         boxes = result.boxes
         keypoints = result.keypoints.data.cpu().numpy()
 
+        track_ids = boxes.id.cpu().numpy().astype(int)
+
         for index, box in enumerate(boxes):
 
             track_id = int(box.id[0])
@@ -197,15 +205,17 @@ while cap.isOpened():
 
             points = keypoints[index]
 
-            x1, y1, x2, y2 = map(
-                int,
-                box.xyxy[0].cpu().tolist()
+            # The Pose Estimation stage's row for this person (pose_pass.py).
+            keypoint_rows.append(
+                pose_pass.keypoint_row(frame_count, fps, track_ids[index], points)
             )
 
-            center = np.array([
-                (x1 + x2) / 2,
-                (y1 + y2) / 2
-            ])
+            corners = box.xyxy[0].cpu().tolist()
+
+            # Integers for drawing only; the centre keeps sub-pixel precision.
+            x1, y1, x2, y2 = map(int, corners)
+
+            center = np.array(box_center(corners))
 
             current_fighters[track_id] = {
                 "center": center,
@@ -288,25 +298,33 @@ while cap.isOpened():
 
             old = previous[track_id]
 
+            # Frames since this fighter was last seen: speeds are divided by
+            # the real elapsed time and withheld after a long gap (kinematics.py).
+            frame_gap = frame_count - old["frame"]
+
             # Bounding-box center movement
-            center_distance = np.linalg.norm(
+            center_distance = float(np.linalg.norm(
                 center - old["center"]
-            )
+            ))
 
-            total_movement[track_id] += center_distance
+            movement_speed = step_speed(center_distance, frame_gap, fps)
 
-            movement_speed = center_distance * fps
+            if movement_speed is not None:
 
-            frame_data[f"{prefix}_movement_speed_px_s"] = float(
-                movement_speed
-            )
+                # A jump across a long gap is not counted as movement.
+                total_movement[track_id] += center_distance
+
+                frame_data[f"{prefix}_movement_speed_px_s"] = float(
+                    movement_speed
+                )
 
             # Arm movement
             wrist_speed = calculate_joint_speed(
                 points,
                 old["points"],
                 WRISTS,
-                fps
+                fps,
+                frame_gap
             )
 
             frame_data[f"{prefix}_wrist_speed_px_s"] = wrist_speed
@@ -316,7 +334,8 @@ while cap.isOpened():
                 points,
                 old["points"],
                 ANKLES,
-                fps
+                fps,
+                frame_gap
             )
 
             frame_data[f"{prefix}_ankle_speed_px_s"] = ankle_speed
@@ -326,6 +345,7 @@ while cap.isOpened():
         )
 
         previous[track_id] = {
+            "frame": frame_count,
             "center": center.copy(),
             "points": points.copy()
         }
@@ -385,6 +405,25 @@ if csv_rows:
 
         writer_csv.writeheader()
         writer_csv.writerows(csv_rows)
+
+# Keypoint rows for the Pose Estimation stage, then the record that lets it
+# reuse them (written last, so an interrupted pass is never reused).
+if keypoint_rows:
+
+    with open(keypoints_csv, "w", newline="") as file:
+
+        writer_keypoints = csv.DictWriter(
+            file,
+            fieldnames=keypoint_rows[0].keys()
+        )
+
+        writer_keypoints.writeheader()
+        writer_keypoints.writerows(keypoint_rows)
+
+    pose_pass.write_provenance(
+        RESULTS_DIR,
+        pose_pass.provenance(video_path, DEVICE, frame_count)
+    )
 
 # ==========================================
 # 11. FINAL RESULTS
