@@ -43,10 +43,28 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/**
+ * The Vite dev server answered itself because its /api proxy is not active
+ * (seen with a long-running dev server: an empty 404 for POST, index.html for
+ * GET). FastAPI never sends either, so the backend was not reached at all.
+ */
+export function proxyInactiveError(): ApiError {
+  return new ApiError(
+    'unreachable',
+    'The dashboard dev server answered instead of the backend: its /api proxy is not active. ' +
+      'Stop and restart `npm run dev` in frontend/.',
+  )
+}
+
+function isDevServerPage(body: string): boolean {
+  return /^\s*<(!doctype html|html)/i.test(body)
+}
+
 /** The error for an answer outside 200–299, with the backend's own reason when it gave one. */
 export function errorForStatus(status: number, body: string): ApiError {
   const json = parseJson(body)
   if (json === undefined && PROXY_FAILURES.has(status)) return unreachableError()
+  if (json === undefined && status === 404 && (!body.trim() || isDevServerPage(body))) return proxyInactiveError()
   return new ApiError('http', detailOf(json) ?? `The backend answered with HTTP ${status}.`, status)
 }
 
@@ -55,6 +73,7 @@ export function readJson(status: number, body: string): unknown {
   if (status < 200 || status > 299) throw errorForStatus(status, body)
   const json = parseJson(body)
   if (json === undefined) {
+    if (isDevServerPage(body)) throw proxyInactiveError()
     throw new ApiError('invalid-response', 'The backend sent an answer that is not JSON.', status)
   }
   return json

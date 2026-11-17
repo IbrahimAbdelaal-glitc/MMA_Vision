@@ -21,7 +21,7 @@ per frame, parity within 0.001 on both clips. With the lean path alone, 1x was c
 - Use the predictor's configured objects (`predictor.preprocess`, `predictor.inference`, `predictor.args`, `predictor.trackers[0]`, `predictor.model.kpt_shape`); never a second tracker or letterbox.
 - Parity tolerance: same people, IDs and order on every real-clip frame; boxes and keypoints within 0.001.
 - No change to detection, timing, pacing, identity, metrics, scoring, threshold, protocol, UI, or `src/`. No new dependencies; no system settings.
-- Python `python`; cv2 before torch. Do not commit without asking the user.
+- Python `python` (the project's Python 3.13 environment); cv2 before torch. Do not commit without asking the user.
 
 ## Review Focus
 
