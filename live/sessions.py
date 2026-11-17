@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from live import constants as K
+from live.atomic import replace_retrying
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -422,7 +423,7 @@ class SessionManager:
         temp = session.live_dir / "session.tmp"
         try:
             temp.write_text(json.dumps(session.summary(), indent=2), encoding="utf-8")
-            os.replace(temp, target)
+            replace_retrying(temp, target)
         except OSError:
             pass
 

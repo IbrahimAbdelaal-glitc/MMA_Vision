@@ -28,6 +28,7 @@ import { useLocalVideo } from './hooks/useLocalVideo'
 import { useReplayVideo } from './hooks/useReplayVideo'
 import type { DashboardView } from './types/dashboard'
 import { cx } from './utils/cx'
+import { engineStatusLine } from './utils/liveView'
 
 /**
  * MMA Vision: one dashboard with two states, Live Monitoring and Match Ended.
@@ -195,6 +196,11 @@ export default function App() {
         message={statusBar.message}
         backendLabel={backend.label}
         backendTone={backend.tone}
+        engineStatus={
+          live && liveSession.state.phase !== 'idle'
+            ? engineStatusLine(liveSession.state.device, liveSession.state.inference, liveSession.state.stats)
+            : null
+        }
       />
     </div>
   )

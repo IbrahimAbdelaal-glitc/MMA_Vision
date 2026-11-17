@@ -32,6 +32,16 @@ JOINTS = {
 
 DECISION_DELAY = K.DUPLICATE_GAP_SECONDS + K.MIN_PEAK_GAP + K.PEAK_HALF_WINDOW   # about 0.63 s
 
+# How limb speed is measured (docs/validation.md, "Speed reference"):
+#   "image": wrist/ankle speed in image pixels, as the offline pipeline
+#            (analyze_strikes.py) measures it. The default, so live events keep
+#            mirroring the final scorecard's candidates.
+#   "torso": wrist/ankle speed relative to the fighter's own torso centre, so a
+#            step, footwork or a camera pan is not counted as limb speed. Not
+#            used by the offline pipeline; live events then differ from it.
+SPEED_REFERENCES = ("image", "torso")
+TORSO_JOINTS = ("left_shoulder", "right_shoulder", "left_hip", "right_hip")
+
 
 # ---------------------------------------------------------------- features
 
@@ -40,6 +50,14 @@ def _point(keypoints, name: str):
     if c is None or not (c >= K.KEYPOINT_CONFIDENCE):
         return None
     return (float(x), float(y))
+
+
+def body_centre(keypoints) -> Optional[tuple]:
+    """Mean of the confident shoulders and hips (at least two), or None."""
+    points = [p for p in (_point(keypoints, j) for j in TORSO_JOINTS) if p is not None]
+    if len(points) < 2:
+        return None
+    return (sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points))
 
 
 def _distance(a, b) -> Optional[float]:
@@ -106,6 +124,7 @@ class Candidate:
     score_status: str
     kinematic_score: Optional[float]
     detection_class: Optional[str]
+    side: str = ""                    # breaks exact ties between the two legs (cross-leg rivals)
 
     @property
     def t(self) -> float:
@@ -120,7 +139,11 @@ class Candidate:
         mine, theirs = self.key(other), other.key(self)
         if mine != theirs:
             return mine > theirs
-        return self.t < other.t
+        if abs(self.t - other.t) > EPS:
+            return self.t < other.t
+        # Same score at the same instant (only possible across the two legs):
+        # a fixed order, so exactly one of the pair survives.
+        return self.side < other.side
 
 
 class SampleStore:
@@ -229,7 +252,16 @@ def _clip(value, low, high):
 
 
 class Detector:
-    def __init__(self):
+    def __init__(self, speed_reference: str = "image",
+                 cross_leg_kick_duplicates: bool = K.CROSS_LEG_KICK_DUPLICATES):
+        """cross_leg_kick_duplicates: kick-like candidates of one fighter on opposite legs
+        within DUPLICATE_GAP_SECONDS are one movement (the kicking leg and the pivoting
+        standing leg), as in refine_strikes.py. False restores per-limb duplicates only,
+        for comparison (python -m live.replay detect --per-limb-duplicates)."""
+        if speed_reference not in SPEED_REFERENCES:
+            raise ValueError(f"speed_reference must be one of {SPEED_REFERENCES}, not {speed_reference!r}")
+        self.speed_reference = speed_reference
+        self.cross_leg_kick_duplicates = cross_leg_kick_duplicates
         self.streams = {corner: {(side, kind): Stream(side, kind) for side in SIDES for kind in TYPES}
                         for corner in CORNERS}
         self.previous = {corner: None for corner in CORNERS}   # (t, keypoints) of last tracked frame
@@ -310,10 +342,18 @@ class Detector:
         dt = t - prev[0]
         if dt <= 0 or dt > K.LIMB_SPEED_MAX_GAP + EPS:
             return out
+        origin_now = origin_before = (0.0, 0.0)
+        if self.speed_reference == "torso":
+            origin_now, origin_before = body_centre(kps), body_centre(prev[1])
+            if origin_now is None or origin_before is None:
+                return out          # no torso to measure against: no speed, never image speed
         for side in SIDES:
             for kind, joint in (("punch-like", "wrist"), ("kick-like", "ankle")):
                 a = _point(kps, f"{side}_{joint}")
                 b = _point(prev[1], f"{side}_{joint}")
+                if a is not None and b is not None:
+                    a = (a[0] - origin_now[0], a[1] - origin_now[1])
+                    b = (b[0] - origin_before[0], b[1] - origin_before[1])
                 d = _distance(a, b)
                 if d is None:
                     continue
@@ -353,12 +393,15 @@ class Detector:
                     if candidate is not None:
                         joined.append(candidate)
 
+        # Rivals within DUPLICATE_GAP_SECONDS are decided DECISION_DELAY after the peak.
+        # That bound holds across streams too: a rival on any stream peaking up to
+        # 0.35 s later has formed by then (MIN_PEAK_GAP + PEAK_HALF_WINDOW after its peak).
         emitted = []
         for corner in CORNERS:
             for stream in self.streams[corner].values():
                 due = [c for c in stream.held if final or t >= c.t + DECISION_DELAY - EPS]
                 for c in sorted(due, key=lambda c: c.t):
-                    rivals = [r for r in stream.pool
+                    rivals = [r for pool in self._rival_pools(corner, stream) for r in pool
                               if r is not c and r.status in ("held", "emitted")
                               and abs(r.t - c.t) < K.DUPLICATE_GAP_SECONDS - EPS]
                     stream.held.remove(c)
@@ -370,6 +413,14 @@ class Detector:
                         self.discarded_duplicates += 1
         emitted.sort(key=lambda e: e["peak_t"])
         return emitted
+
+    def _rival_pools(self, corner: str, stream: Stream) -> list:
+        """The candidate pools a candidate of `stream` competes with for duplicates."""
+        pools = [stream.pool]
+        if self.cross_leg_kick_duplicates and stream.kind == "kick-like":
+            other = "left" if stream.side == "right" else "right"
+            pools.append(self.streams[corner][(other, "kick-like")].pool)
+        return pools
 
     def _form(self, stream: Stream, peak: Sample, t_now: float) -> Optional[Candidate]:
         """Steps 6-8 for a final peak. None if it fails a filter."""
@@ -438,6 +489,7 @@ class Detector:
                       "retraction": retraction, "keypoint_confidence": confidence},
             first_stage=first_stage, pool_size=n, status="held",
             score_status=score_status, kinematic_score=score, detection_class=klass,
+            side=stream.side,
         )
         stream.pool.append(candidate)
         stream.held.append(candidate)

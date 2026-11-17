@@ -28,7 +28,7 @@ React 19, TypeScript 7, Vite 8, Vitest 5, oxlint.
   hand-off only after `poll()` confirms the engine exited.
 - No new dependency is installed. PyAV is not installed (see M10). (Later approved by the user: PyAV 19.0.2, for the drift fixture only; see Status.)
 - No commit or push without asking the user.
-- Run Python as `C:\Users\ibrah\anaconda3\python.exe`. Import ultralytics
+- Run Python as `python` (the project's Python 3.13 environment). Import ultralytics
   (torch) before cv2 is fine, cv2 before torch is fine, but `import torch`
   then `import cv2` aborts with a duplicate OpenMP runtime: the engine
   imports cv2 first.

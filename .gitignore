@@ -23,3 +23,13 @@ Thumbs.db
 
 # Live sessions: uploads and engine output while a session runs.
 /live_sessions/
+
+# Local configuration: copy .env.example to .env (the defaults work as they are).
+.env
+!.env.example
+
+# Evaluation outputs (keypoint caches, replays, reviews of local footage).
+/validation/
+
+# Browser-automation scratch files.
+.playwright-mcp/

@@ -1,0 +1,5 @@
+# Tests and developer tools, on top of requirements.txt.
+-r requirements.txt
+pytest          # python -m pytest tests -q
+httpx           # FastAPI TestClient and live.realcheck
+av              # optional: the two drift-fixture tests skip without it (tests/fixtures/make_drift_fixture.py)
