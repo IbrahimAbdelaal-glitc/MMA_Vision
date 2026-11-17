@@ -1,4 +1,5 @@
 import type { Corner, FighterTally } from '../../types/dashboard'
+import type { CornerState } from '../../types/live'
 import { cx } from '../../utils/cx'
 import { formatCount } from '../../utils/format'
 import { CORNER_STYLES } from '../common/cornerStyles'
@@ -7,7 +8,17 @@ interface FighterHudProps {
   corner: Corner
   /** The fighter's detected-event counts, or null while nothing has been analysed. */
   tally: FighterTally | null
+  /** Live counts: labelled provisional, because the offline scorecard is the final one. */
+  provisional?: boolean
+  /** The live identity state of this corner, while a live session runs. */
+  trackingState?: CornerState | null
   className?: string
+}
+
+const TRACKING_LABELS: Record<CornerState, string> = {
+  tracked: 'Tracked',
+  uncertain: 'Identity uncertain',
+  lost: 'Not tracked',
 }
 
 /**
@@ -18,8 +29,10 @@ interface FighterHudProps {
  * It is a size container (`@container`), so its own width decides the layout:
  * four stats in a row when wide, two by two when narrow (phones).
  */
-export function FighterHud({ corner, tally, className }: FighterHudProps) {
+export function FighterHud({ corner, tally, provisional = false, trackingState = null, className }: FighterHudProps) {
   const style = CORNER_STYLES[corner]
+  let status = tally ? 'Analysed' : 'Not tracked'
+  if (provisional) status = trackingState ? `Provisional · ${TRACKING_LABELS[trackingState]}` : 'Provisional'
 
   return (
     <section
@@ -45,10 +58,10 @@ export function FighterHud({ corner, tally, className }: FighterHudProps) {
           <p
             className={cx(
               'hidden pt-0.5 text-right text-[9px] leading-3 font-bold tracking-[0.6px] uppercase @min-[300px]:block',
-              tally ? style.text : 'text-muted',
+              tally && trackingState !== 'lost' && trackingState !== 'uncertain' ? style.text : 'text-muted',
             )}
           >
-            {tally ? 'Analysed' : 'Not tracked'}
+            {status}
           </p>
         </header>
 
@@ -70,7 +83,11 @@ export function FighterHud({ corner, tally, className }: FighterHudProps) {
               Strike-like events
             </p>
             <p className="mt-1 text-[9px] leading-3 text-muted/80">
-              {tally ? 'Estimated · not confirmed contact' : 'No analysis yet'}
+              {provisional
+                ? 'Live, provisional · not confirmed contact'
+                : tally
+                  ? 'Estimated · not confirmed contact'
+                  : 'No analysis yet'}
             </p>
           </div>
         </div>

@@ -33,11 +33,15 @@ export function LatestEvent({ event }: { event: StrikeEvent | null }) {
             <Zap size={16} aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
-            <p className={cx('caps-heading', style.text)}>{style.name} / strike-like event</p>
+            <p className={cx('caps-heading', style.text)}>
+              {style.name} / strike-like event{event.provisional ? ' · provisional' : ''}
+            </p>
             <p className="mt-1 text-base leading-[19px] font-semibold">{TYPE_TITLES[event.type]}</p>
             <p className="mt-1 truncate text-[9px] leading-[11px] text-muted">
-              Kinematic score {formatMeasure(event.kinematicScore, 1)} (heuristic) · keypoint
-              confidence {formatMeasure(event.keypointConfidence, 2)}
+              {event.kinematicScore === null
+                ? 'Unscored: ranking warm-up (first 4 candidates on this limb)'
+                : `Kinematic score ${formatMeasure(event.kinematicScore, 1)} (heuristic)`}{' '}
+              · keypoint confidence {formatMeasure(event.keypointConfidence, 2)}
             </p>
           </div>
           <div className="shrink-0 text-right">
@@ -45,7 +49,7 @@ export function LatestEvent({ event }: { event: StrikeEvent | null }) {
               {formatClock(event.timeSeconds)}
             </p>
             <p className="mt-1.5 inline-block rounded bg-control px-2.5 py-1 text-[9px] leading-[11px] font-bold tracking-[0.6px] uppercase">
-              {event.detectionClass}
+              {event.detectionClass ?? 'Unscored'}
             </p>
           </div>
         </>

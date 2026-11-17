@@ -15,6 +15,8 @@ export default defineConfig(({ mode }) => {
     '/api': {
       target: apiBaseUrl,
       changeOrigin: true,
+      // The live engine's stream is a WebSocket on the same /api prefix.
+      ws: true,
       rewrite: (path: string) => path.replace(/^\/api/, ''),
     },
   }

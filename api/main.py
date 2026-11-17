@@ -315,13 +315,61 @@ async def create_job(
     finally:
         await file.close()
 
+    return start_job(
+        job_id,
+        Path(file.filename).name,
+        file_size,
+        background_tasks
+    )
+
+
+# ============================================================
+# SHARED JOB START (POST /jobs and the live-session hand-off)
+# ============================================================
+
+# Jobs this API process has scheduled and not yet finished. The live engine
+# refuses to start while one runs, so the GPU is used by one analysis at a
+# time. Kept in memory: a status.json left at "processing" by a crashed
+# server must not block live analysis forever.
+_active_jobs: set = set()
+_active_jobs_guard = threading.Lock()
+
+
+def offline_job_active() -> bool:
+    with _active_jobs_guard:
+        return bool(_active_jobs)
+
+
+def _run_tracked(job_id: str):
+    try:
+        run_pipeline(job_id)
+    finally:
+        with _active_jobs_guard:
+            _active_jobs.discard(job_id)
+
+
+def start_job(
+    job_id: str,
+    original_filename: str,
+    file_size_bytes: int,
+    background_tasks: BackgroundTasks
+) -> dict:
+    """Write status.json, schedule the pipeline and return the 202 body.
+
+    jobs/<job_id>/input/input.mp4 must already exist, in the layout POST /jobs
+    creates. POST /jobs and POST /live-sessions/{id}/analyse both end here, so
+    the two produce identical jobs.
+    """
+
+    job_dir = JOBS_DIR / job_id
+
     now = datetime.now(timezone.utc).isoformat()
 
     initial_status = {
         "job_id": job_id,
         "status": "queued",
-        "original_filename": Path(file.filename).name,
-        "file_size_bytes": file_size,
+        "original_filename": original_filename,
+        "file_size_bytes": file_size_bytes,
         "progress": 0,
         "stages_completed": 0,
         "total_stages": len(PIPELINE_STAGES),
@@ -336,7 +384,9 @@ async def create_job(
         encoding="utf-8"
     )
 
-    background_tasks.add_task(run_pipeline, job_id)
+    with _active_jobs_guard:
+        _active_jobs.add(job_id)
+    background_tasks.add_task(_run_tracked, job_id)
 
     return {
         "message": "Video uploaded successfully. Analysis started.",
@@ -620,3 +670,12 @@ def get_browser_video(job_id: str):
     # No filename, so the browser plays it in the page instead of
     # downloading it. FileResponse answers Range requests, which seeking needs.
     return FileResponse(path=target, media_type="video/mp4")
+
+# ============================================================
+# LIVE SESSIONS (Phase 5): endpoints in api/live_api.py
+# ============================================================
+
+from api import live_api  # noqa: E402  (imported last: it reads this module lazily)
+
+app.include_router(live_api.router)
+app.router.lifespan_context = live_api.lifespan
