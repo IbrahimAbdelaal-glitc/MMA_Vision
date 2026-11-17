@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { LiveEvent } from '../types/live'
-import { engineLocation, liveTally, toStrikeEvent } from './liveView'
+import type { LiveEvent, LiveStats } from '../types/live'
+import { engineLocation, engineStatusLine, liveTally, toStrikeEvent } from './liveView'
 
 function event(overrides: Partial<LiveEvent>): LiveEvent {
   return {
@@ -38,5 +38,35 @@ describe('engine location text', () => {
   it('says nothing it does not know', () => {
     expect(engineLocation(null, null)).toBe('')
     expect(engineLocation('cuda:0', null)).toBe(' · GPU (cuda:0)')
+  })
+})
+
+describe('engine status line (status bar on short overlay screens)', () => {
+  const stats = (over: Partial<LiveStats>): LiveStats => ({
+    framesAnalysed: 10, framesSkipped: 0, analysedRate: 25, detectionActive: true, detectionInactiveReason: null,
+    eventsEmitted: 0, eventsPerMinute: null, eventsPerMinuteBasisSeconds: null, unscoredEventCount: 0,
+    heldCandidatesDiscardedByResets: 0, duplicatesDiscarded: 0, positionT: 1, ...over,
+  })
+
+  it('says detection is active, the analysed rate and where the engine runs', () => {
+    expect(engineStatusLine('cuda:0', 'cuda_graph', stats({}))).toEqual({
+      text: 'Detection active · 25.0 frames/s · GPU (cuda:0) · CUDA graph',
+      warn: false,
+    })
+  })
+
+  it('gives the reason when detection is inactive, as a warning', () => {
+    const line = engineStatusLine('cpu', 'eager', stats({
+      analysedRate: 17.5, detectionActive: false,
+      detectionInactiveReason: 'analysed rate 17.5 frames/s is below 20',
+    }))
+    expect(line).toEqual({
+      text: 'Detection inactive: analysed rate 17.5 frames/s is below 20 · 17.5 frames/s · CPU · standard inference',
+      warn: true,
+    })
+  })
+
+  it('is empty before the engine has reported anything', () => {
+    expect(engineStatusLine(null, null, null)).toBeNull()
   })
 })

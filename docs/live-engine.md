@@ -32,7 +32,7 @@ Open the address Vite prints (normally http://localhost:5173).
 3. The engine loads YOLO11n-pose (GPU when CUDA works, else CPU) and runs
    a warm-up inference. The first start takes about 20 s.
 4. **Play / Pause** drive the video, and so the engine: the browser sends
-   its playback clock about every 200 ms and the engine analyses the
+   its playback clock every 33 ms while playing and the engine analyses the
    newest frame it can reach ("latest frame wins"). Seeking forward skips
    frames; the engine never goes back.
 5. **Swap** exchanges Blue and Red from this moment on; it is logged.
@@ -383,7 +383,52 @@ None of the 1x events is scored because the first four candidates per
 limb are ranking warm-up and a 6 s clip at 30 /s produces fewer candidates
 per limb than at 60 /s. This is expected behaviour, not a regression.
 
+## Finishing pass (2026-11-17)
+
+Fixes, each with a regression test:
+
+- **Offline jobs failed on Windows with `[WinError 5] Access is denied:
+  status.tmp -> status.json`.** A rename onto a file another process holds
+  open (OneDrive sync, antivirus, a status poll) fails on Windows until the
+  handle closes. `live/atomic.py` `replace_retrying` retries
+  PermissionError for up to about 2 s; used for `status.json`, the browser
+  video and the live `session.json` (which used to fail silently).
+  `tests/test_atomic_replace.py` reproduces it with a real open handle.
+- **"Analyse video" answered 404.** A long-running Vite dev server had stopped
+  proxying `/api` (it served index.html for GET and an empty 404 for POST);
+  a fresh `npm run dev` proxies correctly, the config was fine. The dashboard
+  now says so instead of "The backend answered with HTTP 404":
+  `proxyInactiveError` in `frontend/src/services/http.ts`.
+- **The engine status (device, inference, analysed rate, detection and its
+  reason) was hidden below 720 px of viewport height** (a typical laptop
+  browser). It now stays in the metrics panel; in the overlay layout at those
+  heights, where the panel would cover the fighter HUDs, the status bar carries
+  the same line (`engineStatusLine`).
+
+Detector work, measured on real footage, is in `docs/validation.md`:
+`live/replay.py` replays the detector deterministically over cached keypoints,
+and `Detector(speed_reference="torso")` is available as an option. The default
+is unchanged.
+
+Measured after these changes (GPU, lean path, 33 ms clock): 15 s clip at 1x,
+29.3 analysed /s held for the whole clip, detection active 14.9 of 15 s,
+39 events, GPU peak 275 MiB and 0 after exit. With CUDA hidden (CPU, eager):
+16.8 analysed /s, detection reported inactive with "analysed rate 17.5
+frames/s is below 20, the rate limb speed needs (a sample every 0.05 s)",
+no events.
+
 ## Known limitations
+
+- **Detection accuracy on real fights is not established.** There is no
+  human-labelled ground truth yet; see `docs/validation.md`. Reviewing real
+  events found footwork reported as kick-like, walking guards as punch-like,
+  and broadcast camera pans and zooms counted as limb speed. The offline
+  pipeline shares these rules.
+- **At 1x (about 30 analysed /s) live events are mostly not the offline
+  candidates**: 4 of 25 and 10 of 55 matched on the two real clips, versus
+  19 of 25 and 39 of 55 at 60 /s. The offline rules are defined on
+  single-frame speeds at 60 fps. Use slow playback, or the offline result, when
+  live events matter.
 
 - **Drift rejection is verified on one constructed real file.** The
   drift test covers design 6.3's pattern (0.9 ms per gap, 27 ms at frame

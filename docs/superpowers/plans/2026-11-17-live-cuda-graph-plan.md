@@ -18,7 +18,7 @@ no events because of the 3-frame limb-speed gap. See `docs/live-engine.md`, "CUD
 
 - Model unchanged: `yolo11n-pose.pt`, fp32, `imgsz` 640, `conf` 0.35, `classes=[0]`, ByteTrack.
 - No new dependencies; no system or power-setting changes; no change to detection, timing, pacing, identity, metrics, scoring, protocol semantics, overlay rule, or `src/`.
-- Python: `python`; import cv2 (or ultralytics) before torch.
+- Python: `python` (the project's Python 3.13 environment); import cv2 (or ultralytics) before torch.
 - The fallback is never silent: `ready.inference` is `"cuda_graph"` or `"eager"`.
 - Do not commit without asking the user.
 
