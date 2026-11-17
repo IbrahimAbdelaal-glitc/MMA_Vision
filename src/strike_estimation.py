@@ -48,6 +48,8 @@ if pose_pass.reusable(RESULTS_DIR, video_path):
     print(f"Dataset: {output_path}")
     sys.exit(0)
 
+print("No reusable pose pass for this video, model and settings: running pose estimation.")
+
 # Load pose model
 MODEL_PATH = pose_pass.MODEL_PATH
 model = YOLO(str(MODEL_PATH))

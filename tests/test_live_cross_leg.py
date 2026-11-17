@@ -109,3 +109,52 @@ def test_cross_leg_suppression_is_counted_as_a_duplicate():
     run(detector, seq)
 
     assert detector.discarded_duplicates == 1
+
+
+# ---------------------------------------------------- real combinations stay
+LEFT_ARM = (("left_elbow", (430, 340), (410, 300)), ("left_wrist", (450, 310), (360, 300)))
+
+
+def combination_pose(t, right_punches=(), left_punches=(), kicks=None):
+    pts = kicking_pose(t, kicks or {})
+    e = extension_at(t, list(right_punches))
+    for name, g, x in (("right_elbow", (530, 340), (550, 300)), ("right_wrist", (510, 310), (600, 300))):
+        pts[KP[name]] = [g[0] + (x[0] - g[0]) * e, g[1] + (x[1] - g[1]) * e, CONF]
+    e = extension_at(t, list(left_punches))
+    for name, g, x in LEFT_ARM:
+        pts[KP[name]] = [g[0] + (x[0] - g[0]) * e, g[1] + (x[1] - g[1]) * e, CONF]
+    return pts
+
+
+def blue_events(duration, kind, **motion):
+    seq = [(i, i / 60, {"blue": combination_pose(i / 60, **motion), "red": static_pose(400)})
+           for i in range(int(duration * 60))]
+    return [e for e in run(D.Detector(), seq) if e["corner"] == "blue" and e["type"] == kind]
+
+
+def test_a_one_two_one_combination_counts_three_punches():
+    # Right 0.5 s, left 0.7 s, right 0.9 s: same arm 0.4 s apart, so nothing is a duplicate.
+    events = blue_events(2.0, "punch-like", right_punches=[(0.5, 1.0), (0.9, 1.0)], left_punches=[(0.7, 1.0)])
+
+    assert [e["side"] for e in sorted(events, key=lambda e: e["peak_t"])] == ["right", "left", "right"]
+
+
+def test_three_alternating_kicks_half_a_second_apart_all_count():
+    events = blue_events(3.0, "kick-like", kicks={"right": [(0.5, 1.0), (1.5, 1.0)], "left": [(1.0, 1.0)]})
+
+    assert [e["side"] for e in sorted(events, key=lambda e: e["peak_t"])] == ["right", "left", "right"]
+
+
+def test_a_double_kick_with_one_leg_counts_twice():
+    events = blue_events(2.5, "kick-like", kicks={"right": [(0.5, 1.0), (1.1, 1.0)]})
+
+    assert [e["side"] for e in events] == ["right", "right"]
+
+
+def test_a_punch_thrown_with_a_kick_is_not_merged_into_it():
+    # Different types are never duplicates of each other.
+    kicks = blue_events(2.0, "kick-like", right_punches=[(0.5, 1.0)], kicks={"left": [(0.5, 1.0)]})
+    punches = blue_events(2.0, "punch-like", right_punches=[(0.5, 1.0)], kicks={"left": [(0.5, 1.0)]})
+
+    assert [e["side"] for e in kicks] == ["left"]
+    assert [e["side"] for e in punches] == ["right"]
