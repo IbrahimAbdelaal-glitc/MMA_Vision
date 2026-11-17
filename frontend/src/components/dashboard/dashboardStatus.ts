@@ -1,5 +1,6 @@
 import { isJobActive, uploadPercent, type JobState } from '../../hooks/useAnalysisJob'
 import type { BackendHealth } from '../../hooks/useBackendHealth'
+import type { LivePhase } from '../../hooks/useLiveSession'
 import type { DashboardView, LocalVideoSource } from '../../types/dashboard'
 import type { BackendTone } from '../common/backendTone'
 import type { StatusTone } from '../common/StatusChip'
@@ -72,11 +73,32 @@ export function jobSummary(job: JobState): string {
   return `Job ${shortJobId(job.jobId)} · ${state}`
 }
 
+const LIVE_TEXT: Record<Exclude<LivePhase, 'idle'>, { label: string; message: string }> = {
+  uploading: {
+    label: 'Live: uploading',
+    message: 'Uploading the video and checking its frame timing for live analysis.',
+  },
+  starting: { label: 'Live: starting', message: 'Loading the pose model for live analysis.' },
+  live: {
+    label: 'Live analysis',
+    message: 'Provisional live analysis of this video. The final scorecard comes from Analyse offline.',
+  },
+  ended: {
+    label: 'Live ended',
+    message: 'Live values are provisional. Analyse offline for the final scorecard, or Discard.',
+  },
+  'handing-off': { label: 'Live ended', message: 'Handing the video over to the nine-stage offline analysis.' },
+}
+
 export function statusBarText(
   view: DashboardView,
   job: JobState,
   focus: StageFocus,
+  livePhase: LivePhase = 'idle',
 ): { label: string; message: string } {
+  // On Live Monitoring a live session is what the screen shows, whatever job came before.
+  if (view === 'live' && livePhase !== 'idle') return LIVE_TEXT[livePhase]
+
   const status = job.status
   // Until the backend answers, nothing is known about the job: say only that.
   const checking = job.jobId !== null && status === null && !job.trackingError && !job.upload

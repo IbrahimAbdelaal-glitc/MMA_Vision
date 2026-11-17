@@ -1,5 +1,5 @@
 import { FileVideo, TriangleAlert } from 'lucide-react'
-import { useState, type DragEvent } from 'react'
+import { useState, type DragEvent, type ReactNode } from 'react'
 import type { LocalVideoSource } from '../../types/dashboard'
 import { cx } from '../../utils/cx'
 
@@ -9,13 +9,15 @@ interface VideoStageProps {
   onVideoElement: (element: HTMLVideoElement | null) => void
   onSelectVideo: () => void
   onDropFile: (file: File) => void
+  /** Drawn over the video, such as the live engine's pose overlay. */
+  overlay?: ReactNode
 }
 
 /**
  * The central stage. It shows the chosen video, or an invitation to choose
  * one. Tracking overlays are drawn here only when real analysis supplies them.
  */
-export function VideoStage({ source, onVideoElement, onSelectVideo, onDropFile }: VideoStageProps) {
+export function VideoStage({ source, onVideoElement, onSelectVideo, onDropFile, overlay }: VideoStageProps) {
   const [dragging, setDragging] = useState(false)
 
   const onDragOver = (event: DragEvent<HTMLElement>) => {
@@ -54,7 +56,10 @@ export function VideoStage({ source, onVideoElement, onSelectVideo, onDropFile }
       {source ? (
         // The key gives each new file a fresh element, so a playback error
         // from the previous file cannot linger.
-        <SourceVideo key={source.url} source={source} onVideoElement={onVideoElement} />
+        <>
+          <SourceVideo key={source.url} source={source} onVideoElement={onVideoElement} />
+          {overlay}
+        </>
       ) : (
         <EmptyStage onSelectVideo={onSelectVideo} />
       )}

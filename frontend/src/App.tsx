@@ -21,8 +21,9 @@ import { JobProgress } from './components/job/JobProgress'
 import { PlaybackReadout } from './components/video/PlaybackReadout'
 import { ScrubRail } from './components/video/ScrubRail'
 import { StageNotice } from './components/video/StageLabels'
-import { useAnalysisJob } from './hooks/useAnalysisJob'
+import { isJobActive, useAnalysisJob } from './hooks/useAnalysisJob'
 import { useBackendHealth } from './hooks/useBackendHealth'
+import { isLiveActive, useLiveSession } from './hooks/useLiveSession'
 import { useLocalVideo } from './hooks/useLocalVideo'
 import { useReplayVideo } from './hooks/useReplayVideo'
 import type { DashboardView } from './types/dashboard'
@@ -46,6 +47,10 @@ export default function App() {
   // the <video> element appears, is replaced, or goes away.
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  // The live engine follows this video's playback; its hand-off becomes the job below.
+  const liveSession = useLiveSession({ video: videoElement, onHandedOff: (jobId, file) => analysis.follow(jobId, file) })
+  const liveActive = isLiveActive(liveSession.state)
+  const [selectionError, setSelectionError] = useState<string | null>(null)
 
   const job = analysis.state
   // Kept here, not in Match Ended, so a copy chosen for the replay survives
@@ -55,13 +60,15 @@ export default function App() {
   const live = view === 'live'
   const focus = stageFocus(job, source)
   const backend = backendIndicator(health, job)
-  const statusBar = statusBarText(view, job, focus)
+  const statusBar = statusBarText(view, job, focus, liveSession.state.phase)
 
   const openFilePicker = () => fileInput.current?.click()
 
   const onFileChosen = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) {
+    if (file && liveActive) {
+      setSelectionError('End or hand off the live session before choosing another video.')
+    } else if (file) {
       localVideo.select(file)
       setView('live')
     }
@@ -69,7 +76,15 @@ export default function App() {
     event.target.value = ''
   }
 
-  const onDropFile = (file: File) => localVideo.select(file)
+  const onDropFile = (file: File) => {
+    if (liveActive) setSelectionError('End or hand off the live session before choosing another video.')
+    else localVideo.select(file)
+  }
+
+  // One analysis at a time: live and offline never run together.
+  let startBlockedReason: string | null = null
+  if (!source) startBlockedReason = 'Select an MP4 to start live analysis.'
+  else if (isJobActive(job)) startBlockedReason = 'Wait for the offline analysis to finish: one analysis runs at a time.'
 
   const chip = live
     ? ((focus === 'job' ? jobChip(job) : null) ?? (source ? PREVIEW_CHIP : NO_SOURCE_CHIP))
@@ -80,11 +95,11 @@ export default function App() {
   let notice: ReactNode = null
   if (focus === 'job') {
     notice = <JobProgress job={job} onViewResults={() => setView('ended')} />
-  } else if (focus === 'preview' && source) {
+  } else if (focus === 'preview' && source && !liveActive) {
     notice = (
       <StageNotice
         label="Not analysed yet"
-        message="This video is playing from your computer. Analyse video uploads it to the backend for the nine-stage offline analysis."
+        message="This video is playing from your computer. Start live analyses it as it plays (provisional); Analyse video runs the nine-stage offline analysis."
         action={
           <button
             type="button"
@@ -128,6 +143,14 @@ export default function App() {
       {localVideo.error && (
         <AlertBar message={localVideo.error} onDismiss={localVideo.dismissError} />
       )}
+      {selectionError && <AlertBar message={selectionError} onDismiss={() => setSelectionError(null)} />}
+      {liveSession.state.error && (
+        <AlertBar
+          message={`Live analysis: ${liveSession.state.error}${liveSession.state.engineLog.length ? ` (engine log: ${liveSession.state.engineLog.at(-1)})` : ''}`}
+          onDismiss={liveSession.dismiss}
+        />
+      )}
+      {liveSession.state.notice && <AlertBar message={liveSession.state.notice} onDismiss={liveSession.dismiss} />}
       {job.uploadError && (
         <AlertBar
           message={`Upload failed: ${job.uploadError}`}
@@ -148,6 +171,9 @@ export default function App() {
             <LiveMonitoring
               source={source}
               notice={notice}
+              video={videoElement}
+              live={liveSession}
+              startBlockedReason={startBlockedReason}
               onVideoElement={setVideoElement}
               onSelectVideo={openFilePicker}
               onDropFile={onDropFile}
