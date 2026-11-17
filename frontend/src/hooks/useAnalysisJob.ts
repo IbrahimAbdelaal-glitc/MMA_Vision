@@ -182,6 +182,12 @@ export function useAnalysisJob({ onCompleted }: Options = {}) {
     )
   }, [])
 
+  /** Follow a job started elsewhere: the live session's hand-off (POST /live-sessions/{id}/analyse). */
+  const follow = useCallback((jobId: string, file: File | null) => {
+    uploadController.current?.abort()
+    dispatch({ type: 'job-started', jobId, file })
+  }, [])
+
   const retryAnalysis = useCallback(() => dispatch({ type: 'retry-analysis' }), [])
   const dismissUploadError = useCallback(() => dispatch({ type: 'dismiss-upload-error' }), [])
 
@@ -244,5 +250,5 @@ export function useAnalysisJob({ onCompleted }: Options = {}) {
     return () => controller.abort()
   }, [state.jobId, completed, state.analysisAttempt])
 
-  return { state, analyse, retryAnalysis, dismissUploadError }
+  return { state, analyse, follow, retryAnalysis, dismissUploadError }
 }

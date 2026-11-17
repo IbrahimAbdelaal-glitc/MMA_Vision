@@ -37,11 +37,14 @@ export interface StrikeEvent {
   /** Peak of the movement, in seconds from the start of the video. */
   timeSeconds: number
   type: StrikeType
-  detectionClass: DetectionClass
-  /** Heuristic ranking from 0 to 100. It is not a probability. */
-  kinematicScore: number
+  /** Null for a live event emitted while its stream's ranking pool was warming up (unscored). */
+  detectionClass: DetectionClass | null
+  /** Heuristic ranking from 0 to 100. It is not a probability. Null when unscored. */
+  kinematicScore: number | null
   /** Mean pose keypoint confidence for the limb, from 0 to 1. */
-  keypointConfidence: number
+  keypointConfidence: number | null
+  /** True for a live engine event: provisional, the offline scorecard stays final. */
+  provisional?: boolean
 }
 
 /**

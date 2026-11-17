@@ -9,6 +9,7 @@ import { compareScores } from '../../utils/scoring'
 import { seekTo } from '../../utils/seek'
 import { ComparisonTable } from '../analytics/ComparisonTable'
 import { DirectionChart } from '../analytics/DirectionChart'
+import { IdentityCheck } from '../analytics/IdentityCheck'
 import {
   ArtifactsPanel,
   DirectionPanel,
@@ -179,6 +180,12 @@ export function MatchEnded({ job, replay, onRetry }: MatchEndedProps) {
       {scorecard && scorecard.issues.length > 0 && (
         <div className="mt-5">
           <ScorecardCheck issues={scorecard.issues} />
+        </div>
+      )}
+
+      {phase.kind === 'loaded' && job.jobId && (
+        <div className="mt-5 empty:hidden">
+          <IdentityCheck jobId={job.jobId} />
         </div>
       )}
 

@@ -98,6 +98,8 @@ function detailOf(json: unknown): string | null {
   if (!isRecord(json)) return null
   const { detail } = json
   if (typeof detail === 'string') return detail.trim() || null
+  // POST /live-sessions answers 422 with {message, rules}.
+  if (isRecord(detail) && typeof detail.message === 'string') return detail.message.trim() || null
   if (Array.isArray(detail)) {
     const messages = detail.flatMap((item) =>
       isRecord(item) && typeof item.msg === 'string' ? [item.msg] : [],

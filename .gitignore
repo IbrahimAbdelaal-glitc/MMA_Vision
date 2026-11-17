@@ -20,3 +20,6 @@ dist/
 .idea/
 Thumbs.db
 .DS_Store
+
+# Live sessions: uploads and engine output while a session runs.
+/live_sessions/

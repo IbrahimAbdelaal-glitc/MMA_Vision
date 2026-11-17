@@ -64,7 +64,9 @@ export function RecentDetections({ events, limit = 3 }: RecentDetectionsProps) {
                     </span>
                   </td>
                   <td className={BODY_CELL}>{TYPE_LABELS[event.type]}</td>
-                  <td className={BODY_CELL}>{event.detectionClass}</td>
+                  <td className={cx(BODY_CELL, event.detectionClass === null && 'text-muted')}>
+                    {event.detectionClass ?? 'Unscored (warm-up)'}
+                  </td>
                   <td className={cx(BODY_CELL, 'text-right text-muted tabular-nums')}>
                     {formatMeasure(event.kinematicScore, 1)}
                   </td>

@@ -51,13 +51,13 @@ describe('dashboard before any analysis exists', () => {
     },
   )
 
-  it('keeps the monitoring controls disabled and explains why', async () => {
+  it('cannot start live analysis without a video, and says why', async () => {
     await renderApp()
 
-    for (const name of ['Start monitoring', 'Pause monitoring', 'End monitoring']) {
+    for (const name of ['Start live analysis', 'End live analysis']) {
       const button = screen.getByRole('button', { name })
       expect(button).toBeDisabled()
-      expect(button).toHaveAccessibleDescription(/live engine/i)
+      expect(button).toHaveAccessibleDescription(/select an mp4/i)
     }
   })
 })

@@ -21,7 +21,14 @@ function tone(value: number | null | undefined, measuredClass: string): string {
  * pose model's own keypoint confidence. There are no metres (the camera is not
  * calibrated) and no probabilities. Anything not measured shows a dash.
  */
-export function LiveMetricsPanel({ metrics }: { metrics: LiveMetrics | null }) {
+export function LiveMetricsPanel({
+  metrics,
+  provisional = false,
+}: {
+  metrics: LiveMetrics | null
+  /** Values from the live engine: shown, and labelled, as provisional. */
+  provisional?: boolean
+}) {
   const confidence = metrics?.keypointConfidence ?? null
 
   return (
@@ -31,6 +38,11 @@ export function LiveMetricsPanel({ metrics }: { metrics: LiveMetrics | null }) {
     >
       <header className="flex items-center justify-between">
         <h2 className="caps-heading text-fg">Live metrics</h2>
+        {provisional && (
+          <span className="ml-auto mr-2 rounded bg-control px-1.5 py-0.5 text-[8px] leading-[10px] font-bold tracking-[0.6px] text-fg-soft uppercase">
+            Provisional
+          </span>
+        )}
         <span
           aria-hidden
           className={cx('size-1.5 rounded-full', metrics ? 'bg-ok' : 'bg-muted/50')}
