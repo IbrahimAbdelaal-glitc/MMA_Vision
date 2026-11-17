@@ -104,6 +104,15 @@ describe('useLiveSession', () => {
     expect(hook.result.current.state.inference).toBe('cuda_graph')
   })
 
+  it('sends a clock every 33 ms while playing, so 1x can reach 30 analysed frames/s', async () => {
+    vi.useFakeTimers()
+    const { socket, play } = await startedSession()
+    act(() => play(1.036))
+    const before = socket.clocks().length
+    act(() => vi.advanceTimersByTime(330))
+    expect(socket.clocks().length - before).toBe(10)        // 100 ms would give 3: a 10 /s ceiling
+  })
+
   it('sends the clock in engine time on play, pause and while playing', async () => {
     vi.useFakeTimers()
     const { socket, video, state, play } = await startedSession()

@@ -128,8 +128,8 @@ helper (characterised by `tests/test_jobs_contract.py` before the change).
   almost all playback (measured: drawn on 1 % of animation frames). Safest
   choice kept: never draw a stale skeleton on the wrong pose. Instead the
   stage says "Pose overlay hidden while playing: the newest result is N ms
-  behind the picture", the clock is sent every 100 ms (the fastest design
-  8 allows), and on Pause the engine reaches the paused frame and the
+  behind the picture", the clock is sent every 33 ms (design 8 as amended
+  by the fast-clock design), and on Pause the engine reaches the paused frame and the
   overlay is exact (measured at 1x: the note read 400-450 ms behind with
   a 200 ms clock, 350 ms with 100 ms). Showing the overlay during playback needs a design
   change: either draw late results with their lag stated, or let the
@@ -358,6 +358,31 @@ a machine without them it skips. ultralytics is not pinned in
 so after an ultralytics upgrade run `tests/test_live_lean.py` where the clips
 exist before trusting the lean path.
 
+## 33 ms clock (2026-11-17)
+
+Design: `docs/superpowers/specs/2026-11-17-live-fast-clock-design.md`.
+The browser (`CLOCK_INTERVAL_MS`) and `live.realcheck` (`CLOCK_INTERVAL_S`)
+now send the playing clock every 33 ms instead of 100 ms, which lifts the
+1x ceiling from 10 to about 30 eligible frames per second. The pacing rule
+is unchanged: the engine never analyses past the last clock.
+
+Measured on the 6 s clip, lean path, CUDA graph:
+
+| | 1x before (100 ms) | 1x now (33 ms) | 0.1x now |
+|---|---|---|---|
+| `live.realcheck` analysed / skipped | 60 / 300 | 176 / 184 | 360 / 0 |
+| Analysed per second of video | 10.0 | **29.3** (last window 28.5) | 60.0 |
+| Detection active at end | no (20 /s reason) | **yes** | yes |
+| Events emitted (scored) | 0 | 18 (0, all ranking warm-up) | 23 (2) |
+| Browser analysed / skipped | about 10 /s | 163 / 197 (**27.2 /s**), events listed | not re-run |
+| GPU memory (`nvidia-smi`) after exit / Discard | 0 extra | 0 MiB | 0 MiB |
+
+Hand-off after the 0.1x run: offline completed, 25 offline candidates vs
+23 live events, 19 matched, identity check agree over the full 6.0 s.
+None of the 1x events is scored because the first four candidates per
+limb are ranking warm-up and a 6 s clip at 30 /s produces fewer candidates
+per limb than at 60 /s. This is expected behaviour, not a regression.
+
 ## Known limitations
 
 - **Drift rejection is verified on one constructed real file.** The
@@ -368,12 +393,11 @@ exist before trusting the lean path.
   ruled out (design 17).
 - **Analysed rate decides whether events are detected.** Below 20
   analysed frames per second (the rate the 0.05 s limb-speed gap needs),
-  detection is reported inactive with the reason. With CUDA graph
-  inference this laptop reaches about 9-13 analysed fps at 1x (4.5
-  before), so **normal-speed live event detection does not run**, and the
-  dashboard says so. The limit is now the 100 ms clock interval (one new
-  frame per clock, at most 10 /s at 1x), not inference (lean path about
-  34 ms per frame). Slower playback (0.1x) works.
+  detection is reported inactive with the reason. With the lean path and
+  the 33 ms clock this laptop reaches about 27-29 analysed fps at 1x on
+  the 6 s clip, so detection is active at normal speed (see "33 ms clock").
+  The margin over 20 /s is about 7-9 fps; a slower GPU, a busier laptop or
+  battery power can drop below it, and the dashboard then says so.
 - **Overlay hidden during playback** (see Decisions): exact when paused.
 - **Live event peaks are one frame (16.7 ms) late** relative to offline, on
   every matched event, as design 10.4 predicts from the trailing smoothing

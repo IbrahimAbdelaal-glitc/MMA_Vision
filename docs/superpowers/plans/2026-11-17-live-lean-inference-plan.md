@@ -11,8 +11,9 @@
 **Spec:** `docs/superpowers/specs/2026-11-17-live-lean-inference-design.md` (approved 2026-11-17).
 
 **Status (2026-11-17):** implemented and verified, not committed. Lean path 33.9 ms vs 77.4 ms
-per frame, parity within 0.001 on both clips. 1x goal NOT met: analysis is capped at 10 /s by the
-100 ms clock interval (design 8), not by inference. See `docs/live-engine.md`, "Lean inference path".
+per frame, parity within 0.001 on both clips. With the lean path alone, 1x was capped at 10 /s by the
+100 ms clock. After the 33 ms clock (fast-clock design), 1x reaches 29.3 /s with detection active
+(see `docs/live-engine.md`, "33 ms clock").
 
 ## Global Constraints
 

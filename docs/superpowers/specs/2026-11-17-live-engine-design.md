@@ -513,7 +513,7 @@ touches `jobs/` or the pipeline's files.
 
 The browser sends `clock {t, playing}`:
 
-- every 100–250 ms while playing;
+- every 33 ms while playing (was 100–250 ms; amended by `2026-11-17-live-fast-clock-design.md`);
 - immediately on play, pause and seeking;
 - immediately on `waiting` (buffering), with `playing: false`, and on
   `playing` (playback resumed), with `playing: true`;
