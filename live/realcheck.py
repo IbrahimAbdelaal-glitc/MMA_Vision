@@ -30,6 +30,7 @@ from websockets.sync.client import connect
 
 ROOT = Path(__file__).resolve().parent.parent
 MATCH_TOLERANCE = 2 / 60
+CLOCK_INTERVAL_S = 0.033      # same as the browser CLOCK_INTERVAL_MS (fast-clock design)
 
 
 def gpu_memory_mib():
@@ -110,7 +111,7 @@ def run_session(api: str, video: Path, rate: float, ws_base: str) -> dict:
                 ws.send(json.dumps({"type": "clock", "t": duration, "playing": True}))   # the `ended` event
                 break
             ws.send(json.dumps({"type": "clock", "t": t, "playing": True}))
-            time.sleep(0.1)
+            time.sleep(CLOCK_INTERVAL_S)
         done.wait(120)
         played_seconds = time.monotonic() - play_start
     sampler.stop.set()

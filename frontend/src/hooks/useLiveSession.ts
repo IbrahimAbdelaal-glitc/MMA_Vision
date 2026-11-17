@@ -168,8 +168,9 @@ interface Options {
 }
 
 const OPEN = 1
-// The fastest design 8 allows (100–250 ms): the engine never runs ahead of the last clock.
-const CLOCK_INTERVAL_MS = 100
+// Design 8 (amended by the fast-clock design): every 33 ms while playing, so 1x can reach
+// ~30 analysed frames/s. The engine still never runs ahead of the last clock.
+const CLOCK_INTERVAL_MS = 33
 const MAX_RECONNECTS = 8
 const CLOCK_EVENTS = ['play', 'pause', 'seeked', 'seeking', 'ended', 'playing', 'waiting'] as const
 
