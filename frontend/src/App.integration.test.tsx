@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
@@ -133,6 +133,48 @@ describe('uploading and following an analysis job', () => {
     expect(backend.uploads).toMatchObject([{ method: 'POST', url: '/api/jobs', fields: ['file'] }])
     expect(backend.requests).toContain(`GET /api/jobs/${JOB_ID}`)
     expect(window.location.search).toBe(`?job=${JOB_ID}`)
+  })
+
+  it('follows the stages as the backend reports them during the run', async () => {
+    // What api/main.py writes when pipeline.py prints "RUNNING: Movement Data
+    // Analysis" and, later, "RUNNING: Pose Estimation".
+    backend.acceptUploadAs(JOB_ID, {
+      statuses: [
+        { ...PROCESSING_STATUS, current_stage: 'Movement Data Analysis', progress: 11, stages_completed: 1 },
+        { ...PROCESSING_STATUS, current_stage: 'Pose Estimation', progress: 22, stages_completed: 2 },
+      ],
+    })
+    const user = await renderApp()
+    await chooseAndAnalyse(user)
+
+    const panel = await jobPanel()
+    await within(panel).findByText('Movement Data Analysis')
+    expect(panel).toHaveTextContent('1 of 9 stages complete')
+    const bar = within(panel).getByRole('progressbar', { name: 'Analysis progress' })
+    expect(bar).toHaveAttribute('aria-valuenow', '11')
+
+    // The next check, 2.5 s later.
+    await within(panel).findByText('Pose Estimation', {}, { timeout: 4000 })
+    expect(panel).toHaveTextContent('2 of 9 stages complete')
+    expect(within(panel).getByRole('progressbar', { name: 'Analysis progress' })).toHaveAttribute(
+      'aria-valuenow',
+      '22',
+    )
+  }, 10_000)
+
+  it('shows no percentage when the backend reports none', async () => {
+    backend.acceptUploadAs(JOB_ID, {
+      statuses: [{ job_id: JOB_ID, status: 'processing', created_at: PROCESSING_STATUS.created_at }],
+    })
+    const user = await renderApp()
+    await chooseAndAnalyse(user)
+
+    const panel = await jobPanel()
+    await within(panel).findByText('Stage not reported')
+    const bar = within(panel).getByRole('progressbar', { name: 'Analysis progress' })
+    expect(bar).not.toHaveAttribute('aria-valuenow')
+    expect(panel).toHaveTextContent('—')
+    expect(panel).not.toHaveTextContent(/\d+%/)
   })
 
   it('shows how much of the file has been sent while uploading', async () => {
@@ -465,6 +507,7 @@ describe('Match Ended: events, replay, movement and direction', () => {
     await waitForEvents()
 
     const replay = screen.getByRole('region', { name: 'Replay' })
+    await user.click(within(replay).getByRole('button', { name: 'Original video' }))
     const video = within(replay).getByLabelText('Replay of title-fight.mp4')
     expect(video).toHaveAttribute('src', 'blob:mma-vision-test')
     expect(replay).toHaveTextContent(/uploaded from this page/)
@@ -482,6 +525,7 @@ describe('Match Ended: events, replay, movement and direction', () => {
     await waitForEvents()
 
     const replay = screen.getByRole('region', { name: 'Replay' })
+    await user.click(within(replay).getByRole('button', { name: 'Original video' }))
     expect(replay).toHaveTextContent(/does not serve the uploaded video/)
     expect(within(replay).queryByLabelText(/^Replay of/)).not.toBeInTheDocument()
 
@@ -579,6 +623,123 @@ describe('Match Ended: events, replay, movement and direction', () => {
     expect(screen.getByRole('region', { name: 'Selected event' })).toHaveTextContent(
       /Direction unavailable: This job did not produce opponent_direction_analysis\.csv\./,
     )
+  })
+
+  it("plays the backend's annotated video by default and jumps it to the selected event", async () => {
+    backend.addJob(JOB_ID, completedJob())
+    const user = await openJobFromAddress()
+    await waitForEvents()
+
+    const replay = screen.getByRole('region', { name: 'Replay' })
+    expect(within(replay).getByRole('button', { name: 'Annotated video' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    const video = within(replay).getByLabelText('Annotated replay of movement_analysis.mp4')
+    expect(video).toHaveAttribute('src', `/api/jobs/${JOB_ID}/video`)
+    // The backend converts it the first time; until the browser has its
+    // length, the panel says what it is waiting for.
+    expect(replay).toHaveTextContent(/Preparing the annotated video/)
+
+    const seeks = recordSeeks(video)
+    fireEvent.loadedMetadata(video)
+    expect(replay).not.toHaveTextContent(/Preparing the annotated video/)
+    expect(replay).toHaveTextContent(/H\.264 copy of movement_analysis\.mp4/)
+
+    await user.click(screen.getByRole('button', { name: /^00:01\.283 Blue/ }))
+    // The same frames and times as the analysed video, so the same start time.
+    expect(seeks).toEqual([1.15])
+  })
+
+  it('keeps the selected event when switching between the annotated and original video', async () => {
+    backend.acceptUploadAs(JOB_ID, completedJob())
+    const user = await renderApp()
+    await chooseAndAnalyse(user)
+    await waitForEvents()
+    await user.click(screen.getByRole('button', { name: /^00:01\.283 Blue/ }))
+
+    const replay = screen.getByRole('region', { name: 'Replay' })
+    await user.click(within(replay).getByRole('button', { name: 'Original video' }))
+    const original = within(replay).getByLabelText('Replay of title-fight.mp4')
+    const originalSeeks = recordSeeks(original)
+    fireEvent.loadedMetadata(original)
+    expect(originalSeeks).toEqual([1.15])
+
+    await user.click(within(replay).getByRole('button', { name: 'Annotated video' }))
+    const annotated = within(replay).getByLabelText('Annotated replay of movement_analysis.mp4')
+    const annotatedSeeks = recordSeeks(annotated)
+    fireEvent.loadedMetadata(annotated)
+    expect(annotatedSeeks).toEqual([1.15])
+  })
+
+  it('detaches the original video from its file before releasing it', async () => {
+    backend.acceptUploadAs(JOB_ID, completedJob())
+    const user = await renderApp()
+    await chooseAndAnalyse(user)
+    await waitForEvents()
+    const replay = screen.getByRole('region', { name: 'Replay' })
+    await user.click(within(replay).getByRole('button', { name: 'Original video' }))
+    const original = within(replay).getByLabelText('Replay of title-fight.mp4')
+
+    // A <video> still pointing at a released blob: URL keeps asking for it,
+    // and the browser logs every failed request.
+    const srcWhenReleased: Array<string | null> = []
+    URL.revokeObjectURL = () => {
+      srcWhenReleased.push(original.getAttribute('src'))
+    }
+    await user.click(within(replay).getByRole('button', { name: 'Annotated video' }))
+
+    expect(srcWhenReleased).toEqual([null])
+  })
+
+  it("gives the backend's reason when the annotated video cannot be prepared", async () => {
+    const reason = 'No ffmpeg was found to make a browser-playable copy. Install ffmpeg or set MMA_FFMPEG to its path.'
+    backend.addJob(JOB_ID, completedJob({ video: jsonReply(503, { detail: reason }) }))
+    const user = await openJobFromAddress()
+    await waitForEvents()
+
+    const replay = screen.getByRole('region', { name: 'Replay' })
+    fireEvent.error(within(replay).getByLabelText('Annotated replay of movement_analysis.mp4'))
+
+    expect(await within(replay).findByRole('alert')).toHaveTextContent(
+      `The backend could not prepare the annotated video: ${reason}`,
+    )
+    expect(replay).not.toHaveTextContent(/Preparing the annotated video/)
+    // Only the first byte is asked for, to read the reason.
+    expect(backend.requests).toContain(`GET /api/jobs/${JOB_ID}/video [Range: bytes=0-0]`)
+    // The original video is still offered.
+    await user.click(within(replay).getByRole('button', { name: 'Original video' }))
+    expect(within(replay).getByLabelText('Choose the original video for replay')).toBeInTheDocument()
+  })
+
+  it('says so when the backend served the annotated video but the browser cannot play it', async () => {
+    backend.addJob(JOB_ID, completedJob())
+    await openJobFromAddress()
+    await waitForEvents()
+
+    const replay = screen.getByRole('region', { name: 'Replay' })
+    fireEvent.error(within(replay).getByLabelText('Annotated replay of movement_analysis.mp4'))
+
+    expect(await within(replay).findByRole('alert')).toHaveTextContent(
+      /This browser could not play the annotated video/,
+    )
+  })
+
+  it('offers only the original video when the run wrote no processed video', async () => {
+    const withoutVideo = ARTIFACTS.artifacts.filter(
+      (artifact) => artifact.filename !== 'videos/movement_analysis.mp4',
+    )
+    backend.addJob(
+      JOB_ID,
+      completedJob({ artifacts: jsonReply(200, { ...ARTIFACTS, artifacts: withoutVideo }) }),
+    )
+    await openJobFromAddress()
+    await waitForEvents()
+
+    const replay = screen.getByRole('region', { name: 'Replay' })
+    expect(replay).toHaveTextContent(/did not produce movement_analysis\.mp4/)
+    expect(within(replay).queryByRole('button', { name: 'Annotated video' })).not.toBeInTheDocument()
+    expect(within(replay).getByLabelText('Choose the original video for replay')).toBeInTheDocument()
   })
 
   it('keeps the mp4v processed video a download and never plays it in the page', async () => {

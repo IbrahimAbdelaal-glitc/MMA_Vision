@@ -44,6 +44,28 @@ export async function getJobArtifacts(jobId: string, signal?: AbortSignal): Prom
   return normalizeArtifacts(await getJson(jobUrl(jobId, '/artifacts'), signal))
 }
 
+/**
+ * GET /jobs/{job_id}/video : where a <video> element plays the processed
+ * video. The backend serves an H.264 copy of movement_analysis.mp4, which it
+ * makes from the mp4v original the first time this is asked for.
+ */
+export function processedVideoUrl(jobId: string): string {
+  return jobUrl(jobId, '/video')
+}
+
+/**
+ * Asks for the first byte of the processed video, to learn why a <video>
+ * could not load it: a <video> reports an error but never the HTTP answer.
+ * Resolves when the backend serves the video (so the browser could not play
+ * it); rejects with the backend's reason when it could not.
+ */
+export async function checkProcessedVideo(jobId: string, signal?: AbortSignal): Promise<void> {
+  const { status, body } = await send(processedVideoUrl(jobId), 'video/mp4, application/json', signal, {
+    Range: 'bytes=0-0',
+  })
+  if (status < 200 || status > 299) throw errorForStatus(status, body)
+}
+
 /** The text of a CSV or TXT artifact, from its href. */
 export async function getArtifactText(href: string, signal?: AbortSignal): Promise<string> {
   const { status, body } = await send(href, 'text/csv, text/plain, */*', signal)

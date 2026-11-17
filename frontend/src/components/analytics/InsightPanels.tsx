@@ -207,9 +207,10 @@ export function ProcessedVideoPanel({ video }: { video: FileLookup }) {
               <FileLink file={video.file} />
               <p className={FINE_PRINT}>
                 {video.file.sizeBytes !== null && `${formatFileSize(video.file.sizeBytes)} · `}
-                The annotated video. It is saved with the mp4v codec (MPEG-4 Part 2), which Chrome,
-                Edge and Firefox cannot play, so the dashboard offers it as a download only. Open it
-                in a desktop player such as VLC.
+                The annotated video as the pipeline saved it, with the mp4v codec (MPEG-4 Part 2),
+                which Chrome, Edge and Firefox cannot play. The replay plays an H.264 copy the
+                backend makes from it; this download is the original file, for a desktop player
+                such as VLC.
               </p>
             </>
           ) : video.state === 'absent' ? (

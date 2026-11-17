@@ -49,6 +49,8 @@ export interface FakeJob {
   artifacts?: FakeReply
   /** Downloadable files by artifact path, such as "results/movement_report.txt". */
   files?: Record<string, FakeReply>
+  /** GET /jobs/{id}/video, the H.264 copy. Defaults to a served video. */
+  video?: FakeReply
 }
 
 export interface RecordedUpload {
@@ -104,7 +106,8 @@ export class FakeBackend {
     const method = (init?.method ?? 'GET').toUpperCase()
     if (init?.signal?.aborted) throw new DOMException('This operation was aborted', 'AbortError')
 
-    this.requests.push(`${method} ${url}`)
+    const range = new Headers(init?.headers).get('Range')
+    this.requests.push(`${method} ${url}${range ? ` [Range: ${range}]` : ''}`)
     const reply = this.route(method, url)
     return new Response(reply.body, {
       status: reply.status,
@@ -120,7 +123,7 @@ export class FakeBackend {
     const path = url.slice('/api'.length)
     if (method === 'GET' && path === '/') return jsonReply(200, HEALTH)
 
-    const match = /^\/jobs\/([^/]+)(?:\/(results|artifacts|files)(?:\/(.+))?)?$/.exec(path)
+    const match = /^\/jobs\/([^/]+)(?:\/(results|artifacts|video|files)(?:\/(.+))?)?$/.exec(path)
     if (method !== 'GET' || !match) return jsonReply(404, { detail: 'Not Found' })
 
     const [, rawId, resource, filePath] = match
@@ -139,6 +142,10 @@ export class FakeBackend {
     }
     if (resource === 'artifacts') {
       return job.artifacts ?? jsonReply(200, { job_id: rawId, total_artifacts: 0, artifacts: [] })
+    }
+    if (resource === 'video') {
+      // The real endpoint answers a byte range with 206 and the bytes.
+      return job.video ?? new FakeReply(206, '\u0000', 'video/mp4')
     }
     return job.files?.[filePath ?? ''] ?? jsonReply(404, { detail: 'Artifact not found.' })
   }
