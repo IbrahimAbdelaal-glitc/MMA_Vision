@@ -86,13 +86,25 @@ validation/datasets/<clip>/
     truth.json             a complete review.html export: the ground truth
     reviews/*.json         optional reviews by other people (agreement)
     detections/<name>.csv  event lists to score, e.g. offline.csv, live_1x.csv, replay_torso.csv
+    review_list.csv        what to review: all detectors' events, blind  (created by "review-list")
 ```
 
 ```powershell
-python -m evaluation.score init --video C:\path\to\clip.mp4 --name ufc-a-r1
+python -m evaluation.score init --video C:\path\to\clip.mp4 --name ufc-a-r1 --copy
+python -m evaluation.score review-list validation\datasets\ufc-a-r1
 python -m evaluation.score dataset validation\datasets --out validation\report.json
 python -m evaluation.score file --truth truth.json --detections events.csv
 ```
+
+**Review the review list, not one detector's output.** A review becomes ground
+truth only for the moments it covers; anything else must be found and added as
+a missed event. `review-list` merges every `detections/*.csv` into one list.
+Events of different detectors with the same fighter, limb side and type within
+0.15 s of the first of them become one row, so the row stays within matching
+distance of all of them. Events on different sides or of different types are
+never merged: a two-arm pair or a fast 1-2 stays two rows, and the reviewer
+marks a second row for one strike as Duplicate. The list does not say which
+detector found an event. How to label: [labelling.md](labelling.md).
 
 The report gives precision, recall, F1, false positives per minute,
 duplicates, missed events, timestamp error, and the same by fighter and by
@@ -125,6 +137,32 @@ Two distinct broadcast clips, 60 fps, 1920x1020: a 6 s and a 15 s clip
 local file is the same footage as the 15 s clip (identical keypoints). This is
 far too little for accuracy figures, and both clips come from one fight and one
 camera setup. No videos were downloaded.
+
+### The labelled dataset (set up 2026-11-17, not yet labelled)
+
+Both clips are set up in `validation/datasets/` (git-ignored), ready for review:
+
+| Clip | Length | Rows to review | Event lists in `detections/` |
+|---|---|---|---|
+| `clip06s` | 6.0 s, 360 frames | 42 (from 100 events) | 6 |
+| `clip15s` | 15.0 s, 900 frames | 92 (from 210 events) | 6 |
+
+Each clip folder holds:
+* a copy of the video;
+* `manifest.json`, with source and rights still to fill in;
+* `live_keypoints.npz`, the replay cache, identical to the earlier caches;
+* `<clip>_identity_reference.mp4`, the offline annotated video, to tell Blue from Red;
+* `review_list.csv`;
+* the `detections/` event lists, all from the current code:
+  * offline candidates and offline final events (offline pipeline, GPU);
+  * live replays at 30 analysed frames/s (what 1x reaches) and 60 /s;
+  * live replays at 30 /s with torso speed, and with per-limb duplicates.
+
+The 15 s clip uses the `mma cllip -1-highlight.mp4` upload; the WhatsApp file
+in `videos/input` is the same footage. `movement_analysis.mp4`, uploaded in
+one job, is an annotated output with boxes drawn on it, so it is not used. No
+`truth.json` exists yet: `python -m evaluation.score dataset
+validation/datasets` skips both clips with "no truth.json".
 
 ## Results so far
 
@@ -268,12 +306,14 @@ authoritative offline candidates. Decide with labelled data:
 
 ## What to do next
 
-1. Label at least 10 minutes of varied footage (several fights, cameras,
-   distances) with `review.html`, ideally two reviewers on part of it to measure
-   their agreement.
-2. Put the complete review of each clip in `validation/datasets/<clip>/truth.json`,
-   and the offline candidates, live events at 1x and replays
-   (`--speed-reference torso`, `--per-limb-duplicates`) in its `detections/`,
+1. Review `clip06s` and `clip15s` (their `review_list.csv`) following
+   [labelling.md](labelling.md), and save each as `truth.json`. This tests the
+   workflow; 21 s is far too little for accuracy figures.
+2. Label at least 10 minutes of varied footage (several fights, cameras,
+   distances) the same way, ideally with two reviewers on part of it to
+   measure their agreement. For each new clip: `init --copy`, put the offline
+   candidates, live events at 1x and replays (`--speed-reference torso`,
+   `--per-limb-duplicates`) in its `detections/`, run `review-list`, review,
    then run `python -m evaluation.score dataset validation/datasets`.
 3. Only then change detector rules, one at a time, each justified by the
    labelled numbers, and say in the docs what changed.
