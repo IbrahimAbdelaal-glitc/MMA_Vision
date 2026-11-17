@@ -293,9 +293,26 @@ apart (`LIMB_SPEED_MAX_GAP_FRAMES`, carried from offline
 video, analysed frames are about 5-6 frames apart, so every speed is null
 and no peak can form. Detection can only emit events at roughly 20 or more
 analysed frames per second, but the status turns "Active" at 10
-(`MIN_ANALYSED_RATE`). This mismatch predates the CUDA graph; it is
-recorded here and not changed, because it touches the approved detector
-rules.
+(`MIN_ANALYSED_RATE`). This mismatch predated the CUDA graph; the user
+chose to fix it by raising the threshold (next section).
+
+## Detection threshold raised to 20 analysed frames per second (2026-11-17)
+
+User decision (option a): the "detection active" threshold is now derived
+from the speed rule instead of set beside it,
+`MIN_ANALYSED_RATE = 1 / LIMB_SPEED_MAX_GAP` = 20 analysed frames per
+second (`live/constants.py`). The detector itself is unchanged: same speed
+gap, same peaks, same scores. Only what the status reports changes: 10-19
+analysed fps, which could never produce an event, now reads inactive with
+the reason "analysed rate N frames/s is below 20, the rate limb speed needs
+(a sample every 0.05 s)", instead of "Active".
+
+Measured after the change, 6 s clip at 1x (`live.realcheck`): CUDA graph,
+57 analysed / 303 skipped, 9.5 analysed per second of video, detection
+**inactive** with that reason, 0 events, GPU 0 MiB after exit. Tests:
+`test_detection_threshold_is_the_rate_limb_speed_needs`,
+`test_12_analysed_frames_per_second_is_reported_inactive_not_active`,
+`test_30_analysed_frames_per_second_still_detects_the_punches`.
 
 ## Known limitations
 
@@ -305,13 +322,13 @@ rules.
   container. Verification remains two readers agreeing (OpenCV's FFmpeg
   and the 2013 ffprobe), so a demuxer error shared by both cannot be
   ruled out (design 17).
-- **Analysed rate decides whether events are detected.** Below 10
-  analysed frames per second, detection is reported inactive with the
-  reason. With CUDA graph inference this laptop reaches about 9-13
-  analysed fps at 1x (4.5 before), so detection is reported active, but
-  the 3-frame limb-speed gap means no event can form below about 20
-  analysed fps (see "CUDA Graph inference"). **Normal-speed live event
-  detection is still not working on this hardware.**
+- **Analysed rate decides whether events are detected.** Below 20
+  analysed frames per second (the rate the 0.05 s limb-speed gap needs),
+  detection is reported inactive with the reason. With CUDA graph
+  inference this laptop reaches about 9-13 analysed fps at 1x (4.5
+  before), so **normal-speed live event detection does not run on this
+  hardware**, and the dashboard now says so. Slower playback (0.1x) or
+  faster pre/post-processing is needed.
 - **Overlay hidden during playback** (see Decisions): exact when paused.
 - **Live event peaks are one frame (16.7 ms) late** relative to offline, on
   every matched event, as design 10.4 predicts from the trailing smoothing
