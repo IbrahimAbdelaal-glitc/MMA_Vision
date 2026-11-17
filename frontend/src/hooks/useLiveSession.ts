@@ -9,6 +9,7 @@ import type {
   EndReason,
   EngineMessage,
   IdentityEntry,
+  InferencePath,
   LiveEvent,
   LiveFrame,
   LiveStats,
@@ -36,6 +37,7 @@ export interface LiveSessionState {
   upload: { loaded: number; total: number } | null
   connection: LiveConnection
   device: string | null
+  inference: InferencePath | null
   frame: LiveFrame | null
   /** Append-only, in the order the engine decided them. */
   events: LiveEvent[]
@@ -57,6 +59,7 @@ export const NO_SESSION: LiveSessionState = {
   upload: null,
   connection: 'none',
   device: null,
+  inference: null,
   frame: null,
   events: [],
   stats: null,
@@ -113,7 +116,7 @@ function applyMessage(state: LiveSessionState, message: EngineMessage): LiveSess
   if (state.phase === 'idle' || state.phase === 'uploading') return state
   switch (message.type) {
     case 'ready':
-      return { ...state, phase: state.phase === 'starting' ? 'live' : state.phase, device: message.device }
+      return { ...state, phase: state.phase === 'starting' ? 'live' : state.phase, device: message.device, inference: message.inference }
     case 'frame':
       return {
         ...state,

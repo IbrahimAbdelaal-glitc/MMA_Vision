@@ -1,9 +1,10 @@
 import { ArrowLeftRight, FlaskConical, Pause, Play, Square, Trash2 } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 import type { LiveConnection, LivePhase } from '../../hooks/useLiveSession'
-import type { EndReason, LiveStats } from '../../types/live'
+import type { EndReason, InferencePath, LiveStats } from '../../types/live'
 import { cx } from '../../utils/cx'
 import { formatMeasure } from '../../utils/format'
+import { engineLocation } from '../../utils/liveView'
 
 interface MonitoringControlsProps {
   phase: LivePhase
@@ -13,6 +14,7 @@ interface MonitoringControlsProps {
   playing: boolean
   connection: LiveConnection
   device: string | null
+  inference: InferencePath | null
   stats: LiveStats | null
   endReason: EndReason | null
   onStart: () => void
@@ -131,7 +133,12 @@ export function MonitoringControls(props: MonitoringControlsProps) {
         {reason}
       </p>
       {(running || phase === 'ended') && (
-        <EngineStatus connection={props.connection} device={props.device} stats={props.stats} />
+        <EngineStatus
+          connection={props.connection}
+          device={props.device}
+          inference={props.inference}
+          stats={props.stats}
+        />
       )}
     </div>
   )
@@ -148,10 +155,12 @@ const CONNECTION_TEXT: Record<LiveConnection, string> = {
 function EngineStatus({
   connection,
   device,
+  inference,
   stats,
 }: {
   connection: LiveConnection
   device: string | null
+  inference: InferencePath | null
   stats: LiveStats | null
 }) {
   let detection = '—'
@@ -160,8 +169,7 @@ function EngineStatus({
       ? 'Active'
       : `Inactive: ${stats.detectionInactiveReason ?? 'not enough analysed frames'}`
   }
-  let where = ''
-  if (device) where = device === 'cpu' ? ' · CPU' : ` · GPU (${device})`
+  const where = engineLocation(device, inference)
   return (
     <dl
       aria-label="Live engine status"

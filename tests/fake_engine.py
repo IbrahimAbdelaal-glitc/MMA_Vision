@@ -46,7 +46,7 @@ def main():
         time.sleep(60)
         return 0
 
-    emit({"type": "ready", "device": "fake", "model": "none",
+    emit({"type": "ready", "device": "fake", "model": "none", "inference": "eager",
           "video": {"fps": 60.0, "frame_count": 360, "width": 1920, "height": 1020}})
     position = None
     analysed = 0

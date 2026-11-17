@@ -35,6 +35,15 @@ describe('engine clock mapping (measured in Chrome)', () => {
 })
 
 describe('engine messages', () => {
+  it('keeps the inference path from ready and drops unknown values', () => {
+    expect(normalizeEngineMessage({ type: 'ready', device: 'cuda:0', model: 'm', inference: 'cuda_graph' }))
+      .toEqual({ type: 'ready', device: 'cuda:0', model: 'm', inference: 'cuda_graph' })
+    expect(normalizeEngineMessage({ type: 'ready', device: 'cpu', inference: 'eager' }))
+      .toMatchObject({ inference: 'eager' })
+    expect(normalizeEngineMessage({ type: 'ready', inference: 'turbo' })).toMatchObject({ inference: null })
+    expect(normalizeEngineMessage({ type: 'ready' })).toMatchObject({ inference: null })
+  })
+
   it('normalises a frame and keeps unmeasured values null', () => {
     const message = normalizeEngineMessage({
       type: 'frame', t: 0.5, frame_index: 30, provisional: true,

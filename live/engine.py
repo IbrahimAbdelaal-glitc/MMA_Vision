@@ -79,8 +79,8 @@ class EngineCore:
 
     def __init__(self, *, timestamps_ms: list, fps: float, width: int, height: int,
                  capture, model: Callable, emit: Callable, out_dir: Optional[Path],
-                 device: str = "cpu", clock: Callable = time.monotonic,
-                 stats_interval: float = 1.0):
+                 device: str = "cpu", inference: str = "eager",
+                 clock: Callable = time.monotonic, stats_interval: float = 1.0):
         self.verified_ms = list(timestamps_ms)
         self.fps = fps
         self.width, self.height = width, height
@@ -89,6 +89,7 @@ class EngineCore:
         self.model = model
         self.emit = emit
         self.device = device
+        self.inference = inference           # "cuda_graph" or "eager" (design 2026-11-17-live-cuda-graph)
         self.clock = clock
         self.stats_interval = stats_interval
         self.inbox: queue.Queue = queue.Queue()
@@ -124,6 +125,7 @@ class EngineCore:
 
     def ready(self) -> None:
         self.send({"type": "ready", "device": self.device, "model": K.MODEL_FILE,
+                   "inference": self.inference,
                    "video": {"fps": self.fps, "frame_count": len(self.verified_ms),
                              "width": self.width, "height": self.height}})
 
@@ -356,21 +358,42 @@ class CvCapture:
 
 
 class YoloModel:
-    def __init__(self, device: str):
+    def __init__(self, device: str, use_graph: bool = True):
         from ultralytics import YOLO
 
         self.model = YOLO(str(ROOT / "models" / K.MODEL_FILE))
         self.device = device
+        self.use_graph = use_graph
+        self.inference = "eager"                 # "cuda_graph" once a graph is captured
+        self.inference_error: Optional[str] = None
+        self._hook = None                        # the GraphedForward, once installed
 
     def warm_up(self, width: int, height: int) -> float:
-        """One throwaway inference so CUDA/cuDNN set-up (about 20 s on the first
-        call) happens before `ready`, then reset ByteTrack so the first real
-        frame still gets tracker IDs 1 and 2, as offline. Returns seconds taken."""
+        """Throwaway inferences on a blank frame of the video's size, before
+        `ready`: the first does CUDA/cuDNN set-up (about 20 s) and creates the
+        predictor; on CUDA the second captures the network forward as a CUDA
+        Graph (design 2026-11-17-live-cuda-graph), at exactly the letterboxed
+        shape every real frame will have. Then ByteTrack is reset so the first
+        real frame still gets tracker IDs 1 and 2, as offline. Returns seconds."""
 
         import numpy as np
 
+        from live.cuda_graph import GraphedForward
+
         started = time.perf_counter()
-        self(np.zeros((height, width, 3), dtype=np.uint8))
+        blank = np.zeros((height, width, 3), dtype=np.uint8)
+        self(blank)
+        if self.use_graph and str(self.device).startswith("cuda"):
+            backend = self.model.predictor.model.backend
+            hook = GraphedForward(backend.forward)
+            backend.forward = hook
+            self._hook = hook
+            hook.arm()
+            self(blank)
+            if hook.graph_ready:
+                self.inference = "cuda_graph"
+            else:
+                self.inference_error = hook.error or "the CUDA graph was not captured"
         for tracker in getattr(self.model.predictor, "trackers", None) or []:
             tracker.reset()
         return time.perf_counter() - started
@@ -379,6 +402,10 @@ class YoloModel:
         result = self.model.track(frame, persist=True, classes=[0], conf=K.MODEL_CONF,
                                   imgsz=K.MODEL_IMGSZ, device=self.device,
                                   tracker=K.MODEL_TRACKER, verbose=False)[0]
+        if self.inference == "cuda_graph" and not self._hook.graph_ready:
+            self.inference = "eager"             # never keep reporting a graph that was retired
+            self.inference_error = self._hook.error
+            print(f"CUDA graph retired: {self._hook.error}", file=sys.stderr, flush=True)
         if result.boxes is None or result.boxes.id is None or result.keypoints is None:
             return []
         ids = result.boxes.id.int().cpu().tolist()
@@ -427,14 +454,18 @@ def main(argv: Optional[list] = None) -> int:
         print(f"loading {K.MODEL_FILE} on {device}", file=sys.stderr)
         model = YoloModel(device)
         seconds = model.warm_up(int(probe["width"]), int(probe["height"]))
-        print(f"model warm-up took {seconds:.1f} s", file=sys.stderr)
+        print(f"model warm-up took {seconds:.1f} s; inference: {model.inference}", file=sys.stderr)
+        if model.inference_error:
+            print(f"CUDA graph not used, standard inference instead: {model.inference_error}",
+                  file=sys.stderr)
     except Exception as error:  # noqa: BLE001
         emit({"type": "error", "message": f"the engine could not start: {error}", "provisional": True})
         return 2
 
     core = EngineCore(timestamps_ms=probe["timestamps_ms"], fps=probe["fps"],
                       width=probe["width"], height=probe["height"], capture=capture,
-                      model=model, emit=emit, out_dir=Path(args.out), device=device)
+                      model=model, emit=emit, out_dir=Path(args.out), device=device,
+                      inference=model.inference)
     threading.Thread(target=_stdin_reader, args=(core.inbox,), daemon=True).start()
     try:
         return core.run()

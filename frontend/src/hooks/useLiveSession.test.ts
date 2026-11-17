@@ -97,9 +97,11 @@ describe('useLiveSession', () => {
     expect(socket.url).toMatch(/\/api\/live-sessions\/s-1\/stream$/)
     expect(state.currentTime).toBe(0)
     expect(hook.result.current.state.phase).toBe('starting')
-    act(() => socket.emit({ type: 'ready', device: 'cuda:0', model: 'yolo11n-pose.pt', video: VIDEO }))
+    expect(hook.result.current.state.inference).toBeNull()
+    act(() => socket.emit({ type: 'ready', device: 'cuda:0', model: 'yolo11n-pose.pt', inference: 'cuda_graph', video: VIDEO }))
     expect(hook.result.current.state.phase).toBe('live')
     expect(hook.result.current.state.device).toBe('cuda:0')
+    expect(hook.result.current.state.inference).toBe('cuda_graph')
   })
 
   it('sends the clock in engine time on play, pause and while playing', async () => {

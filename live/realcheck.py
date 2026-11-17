@@ -135,6 +135,7 @@ def run_session(api: str, video: Path, rate: float, ws_base: str) -> dict:
         "upload_and_verify_seconds": round(upload_seconds, 2),
         "model_ready_seconds": round(ready_at - started - upload_seconds, 2),
         "device": next((m.get("device") for m in messages if m["type"] == "ready"), None),
+        "inference": next((m.get("inference") for m in messages if m["type"] == "ready"), None),
         "played_seconds": round(played_seconds, 2),
         "end_reason": ended[-1]["reason"] if ended else None,
         "session_state": status.get("state"),
