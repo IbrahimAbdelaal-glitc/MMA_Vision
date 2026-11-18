@@ -312,6 +312,10 @@ ultralytics (AGPL-3.0), PyTorch (BSD-3-Clause), OpenCV (Apache-2.0), FastAPI
 Tailwind CSS (MIT), lucide-react (ISC). ffmpeg/ffprobe (LGPL/GPL, used as
 external programs).
 
+## Contributors
+
+* [MohamedAymanCS](https://github.com/MohamedAymanCS)
+
 ## Licence
 
 MMA Vision is licensed under the GNU Affero General Public License v3.0
