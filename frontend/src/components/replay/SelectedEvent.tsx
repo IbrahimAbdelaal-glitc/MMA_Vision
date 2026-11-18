@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { CandidateEvent, DirectionRow } from '../../types/api'
 import { cx } from '../../utils/cx'
 import { formatClock, formatGrouped, formatMeasure, formatSigned } from '../../utils/format'
+import { detectionLabel } from '../../utils/detectionLabel'
 import { CORNER_NAMES, movementLabel, pointsLabel } from '../timeline/eventText'
 
 /**
@@ -104,7 +105,7 @@ function EventDetails({
         <p className="text-sm leading-[18px] font-semibold">{movementLabel(event)}</p>
       </div>
       <p className="mt-2 text-xs leading-4 text-fg-soft">
-        {event.detectionClass} · {pointsLabel(event.detectionClass)}
+        {detectionLabel(event.detectionClass)} · {pointsLabel(event.detectionClass)}
       </p>
       <p className="mt-1 flex items-baseline gap-2">
         <span className="text-[11px] leading-[14px] text-muted">Peak</span>{' '}

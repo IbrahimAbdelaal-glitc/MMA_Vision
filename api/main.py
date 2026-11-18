@@ -11,7 +11,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 
 from live.atomic import replace_retrying
@@ -240,100 +240,72 @@ def home():
 
 
 # ============================================================
-# CREATE JOB / UPLOAD VIDEO
+# START ANALYSIS FROM videos/input
 # ============================================================
 
-@app.post("/jobs", status_code=202)
-async def create_job(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...)
-):
+INPUT_DIR = ROOT / "videos" / "input"
+CURRENT_JOB_FILE = JOBS_DIR / "current_job.json"
 
-    if not file.filename:
+
+@app.post("/analysis/start", status_code=202)
+def start_folder_analysis(background_tasks: BackgroundTasks):
+    """Start the existing offline pipeline using the sole MP4 in videos/input."""
+
+    videos = sorted(INPUT_DIR.glob("*.mp4")) if INPUT_DIR.exists() else []
+    if not videos:
         raise HTTPException(
-            status_code=400,
-            detail="No filename provided."
+            status_code=404,
+            detail="No MP4 video found. Place one video in videos/input/ and try again.",
         )
-
-    extension = Path(file.filename).suffix.lower()
-
-    if extension != ".mp4":
-        raise HTTPException(
-            status_code=400,
-            detail="Only MP4 videos are supported."
-        )
-
-    # The live engine and the pipeline never use the GPU at the same time
-    # (live sessions are refused while a job runs; this is the other side).
-    if live_session_active():
+    if len(videos) > 1:
         raise HTTPException(
             status_code=409,
-            detail=(
-                "A live session is running. End it before starting an "
-                "offline analysis: one analysis uses the GPU at a time."
-            )
+            detail="More than one MP4 was found in videos/input/. Keep exactly one video there.",
         )
 
+    source = videos[0]
+    if source.stat().st_size == 0:
+        raise HTTPException(status_code=400, detail="The input video is empty.")
+
+    with _active_jobs_guard:
+        if _active_jobs:
+            raise HTTPException(status_code=409, detail="An analysis is already running.")
+
     job_id = str(uuid.uuid4())
-
     job_dir = JOBS_DIR / job_id
-
     input_dir = job_dir / "input"
-    results_dir = job_dir / "results"
-    videos_dir = job_dir / "videos"
-
     input_dir.mkdir(parents=True)
-    results_dir.mkdir()
-    videos_dir.mkdir()
+    (job_dir / "results").mkdir()
+    (job_dir / "videos").mkdir()
 
+    # Copy into the job folder so the pipeline works on a stable snapshot even
+    # if the source file is later replaced in videos/input.
     video_path = input_dir / "input.mp4"
+    shutil.copy2(source, video_path)
 
-    file_size = 0
-
-    try:
-
-        with video_path.open("wb") as destination:
-
-            while True:
-
-                chunk = await file.read(CHUNK_SIZE)
-
-                if not chunk:
-                    break
-
-                file_size += len(chunk)
-
-                if file_size > MAX_UPLOAD_SIZE:
-
-                    raise HTTPException(
-                        status_code=413,
-                        detail="Video exceeds the 500 MB upload limit."
-                    )
-
-                destination.write(chunk)
-
-        if file_size == 0:
-
-            raise HTTPException(
-                status_code=400,
-                detail="Uploaded video is empty."
-            )
-
-    except Exception:
-
-        import shutil
-        shutil.rmtree(job_dir, ignore_errors=True)
-        raise
-
-    finally:
-        await file.close()
-
-    return start_job(
+    response = start_job(
         job_id,
-        Path(file.filename).name,
-        file_size,
-        background_tasks
+        source.name,
+        video_path.stat().st_size,
+        background_tasks,
     )
+    CURRENT_JOB_FILE.write_text(
+        json.dumps({"job_id": job_id}, indent=2), encoding="utf-8"
+    )
+    response["message"] = "Analysis started using the video in videos/input."
+    return response
+
+
+@app.get("/analysis/current")
+def get_current_analysis():
+    if not CURRENT_JOB_FILE.exists():
+        raise HTTPException(status_code=404, detail="No analysis has been started yet.")
+    data = json.loads(CURRENT_JOB_FILE.read_text(encoding="utf-8"))
+    job_id = data.get("job_id")
+    if not isinstance(job_id, str):
+        raise HTTPException(status_code=500, detail="Current analysis reference is invalid.")
+    get_job_directory(job_id)
+    return {"job_id": job_id}
 
 
 # ============================================================
@@ -358,9 +330,9 @@ def offline_job_active() -> bool:
         return bool(_active_jobs)
 
 
-def live_session_active() -> bool:
-    from api import live_api   # imported lazily: live_api imports this module
-    return live_api.manager.busy()
+def _job_is_active(job_id: str) -> bool:
+    with _active_jobs_guard:
+        return job_id in _active_jobs
 
 
 def _run_tracked(job_id: str):
@@ -378,11 +350,10 @@ def start_job(
     file_size_bytes: int,
     background_tasks: BackgroundTasks
 ) -> dict:
-    """Write status.json, schedule the pipeline and return the 202 body.
+    """Write status.json, schedule the offline pipeline and return the 202 body.
 
-    jobs/<job_id>/input/input.mp4 must already exist, in the layout POST /jobs
-    creates. POST /jobs and POST /live-sessions/{id}/analyse both end here, so
-    the two produce identical jobs.
+    The caller must first place a stable video copy at
+    jobs/<job_id>/input/input.mp4.
     """
 
     job_dir = JOBS_DIR / job_id
@@ -413,7 +384,7 @@ def start_job(
     background_tasks.add_task(_run_tracked, job_id)
 
     return {
-        "message": "Video uploaded successfully. Analysis started.",
+        "message": "Analysis started.",
         "job_id": job_id,
         "status": "queued",
         "status_url": f"/jobs/{job_id}",
@@ -429,8 +400,25 @@ def start_job(
 def get_job_status(job_id: str):
 
     job_dir = get_job_directory(job_id)
+    status = get_status(job_dir)
 
-    return get_status(job_dir)
+    # A server restart or interruption can leave status.json at "processing"
+    # after its in-memory background task has disappeared. Report that job as
+    # interrupted on the next poll instead of making the dashboard spin forever.
+    if status.get("status") in {"queued", "processing"} and not _job_is_active(job_id):
+        # Re-read after checking the task registry in case the task finished
+        # between the first status read and that check.
+        status = get_status(job_dir)
+        if status.get("status") in {"queued", "processing"}:
+            update_status(
+                job_dir,
+                status="failed",
+                current_stage="Interrupted",
+                error="Analysis was interrupted before it completed. Start a new analysis to try again.",
+            )
+            status = get_status(job_dir)
+
+    return status
 
 
 # ============================================================
@@ -695,11 +683,3 @@ def get_browser_video(job_id: str):
     # downloading it. FileResponse answers Range requests, which seeking needs.
     return FileResponse(path=target, media_type="video/mp4")
 
-# ============================================================
-# LIVE SESSIONS (Phase 5): endpoints in api/live_api.py
-# ============================================================
-
-from api import live_api  # noqa: E402  (imported last: it reads this module lazily)
-
-app.include_router(live_api.router)
-app.router.lifespan_context = live_api.lifespan

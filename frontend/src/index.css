@@ -36,50 +36,73 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Design tokens, sampled from the Figma file "MMA Vision · Single dashboard".
+   Colors sampled from the attached Hayastan MMA reference image.
 --------------------------------------------------------------------------- */
 @theme {
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
 
-  /* Surfaces */
-  --color-ink: #05080d;
-  --color-bar: #0a0e14;
-  --color-hud: #08101b;
-  --color-panel: #101824;
-  --color-panel-soft: #121c2a;
-  --color-panel-raised: #131b28;
-  --color-control: #253349;
-  --color-control-hover: #2f4263;
-  --color-line: #2a374b;
-  --color-line-strong: #42516a;
+  /* Black and charcoal surfaces with neutral gray borders. */
+  --color-ink: #080808;
+  --color-bar: #0b0b0c;
+  --color-hud: #111112;
+  --color-panel: #151516;
+  --color-panel-soft: #1b1b1d;
+  --color-panel-raised: #232326;
+  --color-control: #303033;
+  --color-control-hover: #3a3a3e;
+  --color-line: #333337;
+  --color-line-strong: #56565b;
 
   /* Text */
-  --color-fg: #f5f7fb;
-  --color-fg-soft: #d1dbe9;
-  --color-muted: #a6b2c3;
+  --color-fg: #f3f1ec;
+  --color-fg-soft: #d5d8d2;
+  --color-muted: #a1a1a5;
 
-  /* Fighter corners: the only saturated colours in the interface */
-  --color-corner-blue: #56a0ff;
-  --color-corner-blue-surface: #101f33;
-  --color-corner-blue-line: #284b78;
-  --color-corner-red: #ff6575;
-  --color-corner-red-surface: #291a26;
-  --color-corner-red-line: #643442;
+  /* Blue corner uses silver-gray, keeping fighter identity without blue UI. */
+  --color-corner-blue: #b3b3b7;
+  --color-corner-blue-surface: #202022;
+  --color-corner-blue-line: #515155;
+  --color-corner-red: #e14a42;
+  --color-corner-red-surface: #2d1b1a;
+  --color-corner-red-line: #68403a;
 
-  /* The corner colours as chart marks. The Figma shades above are too light
-     for lines and dots on the panel surfaces (OKLCH L 0.70, above the 0.67
-     dark-mode ceiling), so charts use the same hue and chroma at L 0.66.
-     Checked with the dataviz palette validator against #101824 and #131b28. */
-  --color-series-blue: #4993f1;
-  --color-series-red: #ee5667;
+  /* Neutral gray and red chart marks match the arena palette. */
+  --color-series-blue: #a4a4a8;
+  --color-series-red: #d94c44;
 
   /* Status */
-  --color-ok: #73dfc0;
-  --color-sage: #c6dab1;
-  --color-warn: #e0b783;
-  --color-warn-surface: #282219;
-  --color-ended: #c9b8e8;
-  --color-brand: #4f8ff7;
+  --color-ok: #b4b4b8;
+  --color-sage: #d0d0d3;
+  --color-warn: #c1c1c4;
+  --color-warn-surface: #272729;
+  --color-ended: #a4a4a8;
+  --color-brand: #e14a42;
+
+  /* Existing accent utilities now resolve to silver-gray or fight red. */
+  --color-sky-300: #c2c2c6;
+  --color-sky-400: #a0a0a4;
+  --color-sky-500: #6e6e73;
+  --color-cyan-300: #d0d0d3;
+  --color-emerald-200: #d0d0d3;
+  --color-emerald-300: #b4b4b8;
+  --color-emerald-400: #97979b;
+  --color-amber-200: #c8c8cb;
+  --color-amber-300: #a5a5a9;
+  --color-rose-200: #ffc0b8;
+  --color-rose-300: #ff877d;
+  --color-rose-400: #e14a42;
+  --color-rose-500: #c93d37;
+
+  /* Warm off-white and neutral shadows sampled from the reference. */
+  --color-slate-50: #f8f6f2;
+  --color-slate-100: #f3f1ec;
+  --color-slate-200: #d5d8d2;
+  --color-slate-300: #c2c2c6;
+  --color-slate-400: #a0a0a4;
+  --color-slate-500: #7d7d82;
+  --color-slate-600: #5e5e63;
+  --color-slate-800: #252528;
+  --color-slate-950: #080808;
 }
 
 /* Small tracked capitals used for panel and field labels throughout the Figma. */
@@ -125,12 +148,180 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-corner-blue);
+    outline: 2px solid var(--color-brand);
     outline-offset: 2px;
   }
 }
 
 @layer components {
+  /* The offline analysis dashboard. */
+  .mma-backdrop {
+    background:
+      linear-gradient(180deg, rgb(5 7 8 / 0.3) 0%, rgb(5 7 8 / 0.43) 48%, rgb(5 7 8 / 0.72) 100%),
+      url('/mma-cage-background.png') center top / cover fixed,
+      #080808;
+  }
+
+  .brand-mark {
+    position: relative;
+    color: var(--color-brand);
+    border-color: rgb(225 74 66 / 0.34);
+    background-color: rgb(225 74 66 / 0.09);
+  }
+
+  .brand-mark-letter {
+    position: absolute;
+    top: 13px;
+    font-size: 12px;
+    line-height: 14px;
+    font-weight: 900;
+    color: #ffb0a8;
+  }
+
+  .fight-cta {
+    background: var(--color-brand);
+    color: #fffaf7;
+    box-shadow: 0 8px 30px rgb(225 74 66 / 0.2);
+  }
+
+  .fight-cta:hover:not(:disabled) {
+    background: #c93d37;
+  }
+
+  .status-light {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #64748b;
+  }
+
+  .status-light-on {
+    background: #b7b7bb;
+    box-shadow: 0 0 0 3px rgb(183 183 187 / 0.1), 0 0 12px rgb(183 183 187 / 0.38);
+    animation: status-breathe 2.4s ease-in-out infinite;
+  }
+
+  .status-light-off {
+    background: #e14a42;
+    box-shadow: 0 0 0 3px rgb(225 74 66 / 0.12);
+  }
+
+  .panel-glow {
+    position: relative;
+    background-image: radial-gradient(ellipse 52% 100% at 100% 0%, rgb(225 74 66 / 0.045), transparent 78%);
+  }
+
+  .stage-empty {
+    background:
+      radial-gradient(ellipse 55% 80% at 50% 0%, rgb(225 74 66 / 0.09), transparent 70%),
+      repeating-linear-gradient(45deg, rgb(220 220 224 / 0.022) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(-45deg, rgb(220 220 224 / 0.022) 0 1px, transparent 1px 24px),
+      linear-gradient(135deg, #171719, #09090a 65%);
+  }
+
+  .event-card {
+    animation: strike-in 420ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  }
+
+  .event-card-blue:hover {
+    box-shadow: inset 2px 0 #b3b3b7, 0 8px 24px rgb(0 0 0 / 0.14);
+  }
+
+  .event-card-red:hover {
+    box-shadow: inset 2px 0 #e14a42, 0 8px 24px rgb(0 0 0 / 0.14);
+  }
+
+  .summary-card {
+    position: relative;
+    overflow: hidden;
+    transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+  }
+
+  .summary-card::before {
+    position: absolute;
+    inset: 0 20% auto;
+    height: 1px;
+    content: '';
+  }
+
+  .summary-blue::before {
+    background: linear-gradient(90deg, transparent, rgb(179 179 183 / 0.55), transparent);
+  }
+
+  .summary-red::before {
+    background: linear-gradient(90deg, transparent, rgb(225 74 66 / 0.55), transparent);
+  }
+
+  .summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 50px rgb(0 0 0 / 0.18);
+  }
+
+  .summary-blue:hover {
+    border-color: rgb(179 179 183 / 0.25);
+  }
+
+  .summary-red:hover {
+    border-color: rgb(225 74 66 / 0.25);
+  }
+
+  .progress-fill {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .progress-fill::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+    animation: progress-sheen 2.4s ease-in-out infinite;
+  }
+
+  .animate-enter {
+    animation: rise-in 550ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  }
+
+  .delay-1 { animation-delay: 70ms; }
+  .delay-2 { animation-delay: 130ms; }
+  .delay-3 { animation-delay: 190ms; }
+
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes strike-in {
+    from { opacity: 0; transform: translateX(9px) scale(0.99); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+  }
+
+  @keyframes status-breathe {
+    0%, 100% { box-shadow: 0 0 0 3px rgb(183 183 187 / 0.08), 0 0 9px rgb(183 183 187 / 0.3); }
+    50% { box-shadow: 0 0 0 4px rgb(183 183 187 / 0.12), 0 0 14px rgb(183 183 187 / 0.48); }
+  }
+
+  @keyframes progress-sheen {
+    0%, 30% { transform: translateX(-100%); }
+    85%, 100% { transform: translateX(100%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status-light-on,
+    .progress-fill::after,
+    .animate-enter,
+    .event-card {
+      animation: none;
+    }
+
+    .summary-card,
+    .summary-card:hover {
+      transition: none;
+      transform: none;
+    }
+  }
+
   /* -------------------------------------------------------------------------
      Live Monitoring layout. One set of panels, placed by named grid areas.
      Stacked (default): everything flows under the video and the page scrolls.
@@ -218,10 +409,10 @@
   /* Empty stage backdrop: arena light from above and a faint cage mesh. */
   .stage-backdrop {
     background:
-      radial-gradient(90% 70% at 50% 0%, rgb(86 160 255 / 0.11), transparent 62%),
-      repeating-linear-gradient(45deg, rgb(245 247 251 / 0.03) 0 1px, transparent 1px 22px),
-      repeating-linear-gradient(-45deg, rgb(245 247 251 / 0.03) 0 1px, transparent 1px 22px),
-      linear-gradient(#0b1220, #05080d);
+      radial-gradient(90% 70% at 50% 0%, rgb(225 74 66 / 0.08), transparent 62%),
+      repeating-linear-gradient(45deg, rgb(220 220 224 / 0.03) 0 1px, transparent 1px 22px),
+      repeating-linear-gradient(-45deg, rgb(220 220 224 / 0.03) 0 1px, transparent 1px 22px),
+      linear-gradient(#171719, #080808);
   }
 
   /* Thin timeline under the top bar for a recorded source. */

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { ClassDirection } from '../../services/events'
 import type { MovementReport, Part } from '../../types/api'
 import { formatFileSize, formatGrouped, formatSigned } from '../../utils/format'
+import { detectionLabel } from '../../utils/detectionLabel'
 import type { FileLookup } from '../dashboard/matchEndedState'
 import { AnalyticsPanel } from './AnalyticsPanel'
 import { FileLink } from './FileLink'
@@ -143,7 +144,7 @@ export function DirectionPanel({ report, data, classes, problem }: DirectionPane
         <dl className="mt-3 grid grid-cols-2 gap-3">
           {scored.map((group) => (
             <div key={group.detectionClass}>
-              <dt className="caps-heading text-muted">{group.detectionClass}</dt>
+              <dt className="caps-heading text-muted">{detectionLabel(group.detectionClass)}</dt>
               <dd className="mt-1 text-lg leading-6 font-semibold tabular-nums">
                 {formatSigned(group.alignment, 3)}
               </dd>

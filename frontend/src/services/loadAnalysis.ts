@@ -20,8 +20,9 @@ export async function loadAnalysis(jobId: string, signal: AbortSignal): Promise<
 
   // Every file is located through the backend's own file list and fetched
   // from its download_url, once, even when two parts read it.
-  const [classified, direction, movement, movementReport] = await Promise.all([
+  const [classified, finalCandidates, direction, movement, movementReport] = await Promise.all([
     download(artifacts, ARTIFACT_PATHS.classifiedEvents, signal),
+    download(artifacts, ARTIFACT_PATHS.finalEvents, signal),
     download(artifacts, ARTIFACT_PATHS.directionData, signal),
     download(artifacts, ARTIFACT_PATHS.movementSeries, signal),
     download(artifacts, ARTIFACT_PATHS.movementReport, signal),
@@ -31,7 +32,9 @@ export async function loadAnalysis(jobId: string, signal: AbortSignal): Promise<
     results,
     artifacts,
     classification: read(classified, countClassifications),
-    events: read(classified, readCandidateEvents),
+    // The dashboard event list shows only the backend's final filtered events
+    // (Strong and Very Strong), not every preliminary classified candidate.
+    events: read(finalCandidates, (text) => readCandidateEvents(text, 'final_strike_candidates.csv')),
     direction: read(direction, readDirection),
     movement: read(movement, readMovementSeries),
     movementReport: read(movementReport, readMovementReport),

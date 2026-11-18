@@ -2,6 +2,7 @@ import type { CandidateEvent } from '../../types/api'
 import type { Corner, DetectionClass } from '../../types/dashboard'
 import { formatClock } from '../../utils/format'
 import { pointsFor } from '../../utils/scoring'
+import { detectionLabel } from '../../utils/detectionLabel'
 
 /*
  * The words used for one strike-like movement candidate, wherever it is
@@ -25,8 +26,8 @@ export function pointsLabel(detectionClass: DetectionClass): string {
   return `${points} point${points === 1 ? '' : 's'}`
 }
 
-/** What a screen reader hears for an event's row: "00:01.283 Blue punch-like, right, Very Strong". */
+/** What a screen reader hears for an event's row: "00:01.283 Blue punch-like, right, Significant". */
 export function eventRowName(event: CandidateEvent): string {
   const side = event.side ? `, ${event.side}` : ''
-  return `${formatClock(event.peakTime)} ${CORNER_NAMES[event.corner]} ${event.eventType}${side}, ${event.detectionClass}`
+  return `${formatClock(event.peakTime)} ${CORNER_NAMES[event.corner]} ${event.eventType}${side}, ${detectionLabel(event.detectionClass)}`
 }

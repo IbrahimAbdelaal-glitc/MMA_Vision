@@ -1,6 +1,7 @@
 import type { StrikeEvent, StrikeType } from '../../types/dashboard'
 import { cx } from '../../utils/cx'
 import { formatClock, formatMeasure } from '../../utils/format'
+import { detectionLabel } from '../../utils/detectionLabel'
 import { CORNER_STYLES } from '../common/cornerStyles'
 
 const TYPE_LABELS: Record<StrikeType, string> = {
@@ -65,7 +66,7 @@ export function RecentDetections({ events, limit = 3 }: RecentDetectionsProps) {
                   </td>
                   <td className={BODY_CELL}>{TYPE_LABELS[event.type]}</td>
                   <td className={cx(BODY_CELL, event.detectionClass === null && 'text-muted')}>
-                    {event.detectionClass ?? 'Unscored (warm-up)'}
+                    {event.detectionClass ? detectionLabel(event.detectionClass) : 'Unscored (warm-up)'}
                   </td>
                   <td className={cx(BODY_CELL, 'text-right text-muted tabular-nums')}>
                     {formatMeasure(event.kinematicScore, 1)}

@@ -236,7 +236,7 @@ export function unscoredCounts(phase: MatchPhase): UnscoredCounts {
   if (scorecard && classificationContradictsScorecard(classification.data, scorecard)) {
     return {
       counts: null,
-      note: 'classified_strike_candidates.csv disagrees with the scorecard on Strong and Very Strong events, so its Review and Low counts are not shown.',
+      note: 'classified_strike_candidates.csv disagrees with the scorecard on Strong and Significant events, so its Review and Low counts are not shown.',
     }
   }
 

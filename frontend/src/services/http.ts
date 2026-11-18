@@ -85,9 +85,10 @@ export async function send(
   accept: string,
   signal?: AbortSignal,
   headers: Record<string, string> = {},
+  method: 'GET' | 'POST' = 'GET',
 ): Promise<{ status: number; body: string }> {
   try {
-    const response = await fetch(url, { headers: { ...headers, Accept: accept }, signal })
+    const response = await fetch(url, { method, headers: { ...headers, Accept: accept }, signal })
     return { status: response.status, body: await response.text() }
   } catch (error) {
     // A cancelled request is not a connection problem; let the caller see it as it is.

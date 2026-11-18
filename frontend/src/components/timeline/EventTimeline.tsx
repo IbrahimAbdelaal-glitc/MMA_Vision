@@ -3,6 +3,7 @@ import type { CandidateEvent } from '../../types/api'
 import { cx } from '../../utils/cx'
 import { formatClock, formatMeasure } from '../../utils/format'
 import { pointsFor } from '../../utils/scoring'
+import { detectionLabel } from '../../utils/detectionLabel'
 import { SERIES_COLORS } from '../charts/series'
 import { Swatch } from '../charts/Swatch'
 import { Segmented } from '../common/Segmented'
@@ -140,7 +141,7 @@ export function EventTimeline({
       {events && (
         <footer className="space-y-1 border-t border-line px-5 py-3 text-[10px] leading-[13px] text-muted">
           <p>
-            Points follow the experimental scoring rules: Very Strong 3, Strong 2, Review and Low 0.
+            Points follow the experimental scoring rules: Significant 3, Strong 2, Review and Low 0.
             The kinematic score is the pipeline’s heuristic ranking from 0 to 100, not a
             probability; keypoint confidence is the pose model’s mean confidence for the limb.
           </p>
@@ -159,7 +160,7 @@ export function EventTimeline({
 
 function emptyMessage(filter: EventFilter): string {
   return filter === 'scored'
-    ? 'No Strong or Very Strong events in this job. Show all candidates to list the Review and Low ones.'
+    ? 'No Strong or Significant events in this job. Show all candidates to list the Review and Low ones.'
     : 'classified_strike_candidates.csv lists no events for this job.'
 }
 
@@ -211,7 +212,7 @@ function EventRow({ event, selected, onSelect }: EventRowProps) {
         </span>
       </td>
       <td className="px-5 whitespace-nowrap">{movementLabel(event)}</td>
-      <td className="px-5 whitespace-nowrap">{event.detectionClass}</td>
+      <td className="px-5 whitespace-nowrap">{detectionLabel(event.detectionClass)}</td>
       <td className="px-5 text-right tabular-nums">{pointsFor(event.detectionClass)}</td>
       <td className="px-5 text-right tabular-nums">{formatMeasure(event.keypointConfidence, 2)}</td>
       <td className="px-5 text-right tabular-nums">{formatMeasure(event.kinematicScore, 2)}</td>

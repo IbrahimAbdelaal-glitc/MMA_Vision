@@ -61,7 +61,7 @@ export function TopBar({
         <button
           type="button"
           onClick={onSelectVideo}
-          className="order-2 ml-auto flex h-9 items-center gap-2 rounded-md bg-[#1b2c4a] px-3.5 text-[13px] font-semibold text-fg transition-colors hover:bg-control-hover md:order-3 xl:order-4"
+          className="order-2 ml-auto flex h-9 items-center gap-2 rounded-md bg-[#252527] px-3.5 text-[13px] font-semibold text-fg transition-colors hover:bg-control-hover md:order-3 xl:order-4"
         >
           <Upload size={14} aria-hidden />
           Select MP4

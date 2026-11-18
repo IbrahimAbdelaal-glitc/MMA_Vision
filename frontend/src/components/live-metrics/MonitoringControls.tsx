@@ -247,7 +247,7 @@ function ControlButton({
       onClick={onClick}
       className={cx(
         'flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-semibold text-fg transition-colors disabled:opacity-45',
-        primary ? 'bg-[#1b2c4a] enabled:hover:bg-control-hover' : 'bg-control enabled:hover:bg-control-hover',
+        primary ? 'bg-[#252527] enabled:hover:bg-control-hover' : 'bg-control enabled:hover:bg-control-hover',
         className,
       )}
     >

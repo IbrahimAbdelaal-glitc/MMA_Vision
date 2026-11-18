@@ -4,6 +4,7 @@ import type { ClassDirection, LinkedDirectionRow } from '../../services/events'
 import { niceTicks } from '../../utils/chart'
 import { cx } from '../../utils/cx'
 import { formatClock, formatSigned } from '../../utils/format'
+import { detectionLabel } from '../../utils/detectionLabel'
 import { SERIES_COLORS } from '../charts/series'
 import { Swatch } from '../charts/Swatch'
 import { Segmented } from '../common/Segmented'
@@ -224,7 +225,7 @@ export function DirectionChart({ rows, byClass, problem, selectedId, onSelect }:
             {groups.map((group) => (
               <Fragment key={group.summary.detectionClass}>
                 <div className="min-w-0">
-                  <p className="text-xs leading-4 font-semibold">{group.summary.detectionClass}</p>
+                  <p className="text-xs leading-4 font-semibold">{detectionLabel(group.summary.detectionClass)}</p>
                   <p className="text-[10px] leading-[13px] text-muted">
                     {group.total} event{group.total === 1 ? '' : 's'}
                     {group.unmeasured > 0 && ` · ${group.unmeasured} not measured`}
@@ -282,7 +283,7 @@ export function DirectionChart({ rows, byClass, problem, selectedId, onSelect }:
                         }}
                         type="button"
                         tabIndex={dot.key === tabStop ? 0 : -1}
-                        aria-label={`${CORNER_NAMES[dot.row.corner]} ${dot.row.eventType} at ${formatClock(dot.row.peakTime)}, ${dot.row.detectionClass}, ${spec.label.toLowerCase()} ${spec.format(dot.value)}`}
+                        aria-label={`${CORNER_NAMES[dot.row.corner]} ${dot.row.eventType} at ${formatClock(dot.row.peakTime)}, ${detectionLabel(dot.row.detectionClass)}, ${spec.label.toLowerCase()} ${spec.format(dot.value)}`}
                         aria-current={eventId === selectedId ? 'true' : undefined}
                         onClick={() => onSelect(eventId)}
                         onFocus={() => {

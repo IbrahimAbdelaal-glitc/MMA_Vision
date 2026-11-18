@@ -76,9 +76,12 @@ function readEventRow(row: Record<string, string>): Omit<CandidateEvent, 'id'> |
 }
 
 /** classified_strike_candidates.csv: every candidate, with its class. */
-export function readCandidateEvents(csvText: string): CandidateEvents {
+export function readCandidateEvents(
+  csvText: string,
+  fileName = 'classified_strike_candidates.csv',
+): CandidateEvents {
   const table = parseCsv(csvText)
-  requireColumns(table, EVENT_COLUMNS, 'classified_strike_candidates.csv')
+  requireColumns(table, EVENT_COLUMNS, fileName)
 
   const events: CandidateEvent[] = []
   let unrecognisedRows = 0

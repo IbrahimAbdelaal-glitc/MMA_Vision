@@ -47,7 +47,7 @@ export function StateTabs({ view, onChange, className }: StateTabsProps) {
             className={cx(
               'h-9 flex-1 rounded-md px-3.5 text-left text-[13px] font-semibold transition-colors md:w-[150px] md:flex-none xl:w-[158px]',
               selected
-                ? 'bg-[#1b2c4a] text-fg ring-1 ring-corner-blue-line ring-inset'
+                ? 'bg-[#252527] text-fg ring-1 ring-corner-blue-line ring-inset'
                 : 'bg-panel-raised text-muted hover:text-fg',
             )}
           >

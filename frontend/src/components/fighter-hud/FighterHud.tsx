@@ -2,6 +2,7 @@ import type { Corner, FighterTally } from '../../types/dashboard'
 import type { CornerState } from '../../types/live'
 import { cx } from '../../utils/cx'
 import { formatCount } from '../../utils/format'
+import { detectionLabel } from '../../utils/detectionLabel'
 import { CORNER_STYLES } from '../common/cornerStyles'
 
 interface FighterHudProps {
@@ -98,7 +99,7 @@ export function FighterHud({ corner, tally, provisional = false, trackingState =
           <HudStat label="Punch-like" value={tally?.punchLike} />
           <HudStat label="Kick-like" value={tally?.kickLike} />
           <HudStat label="Strong" value={tally?.strong} accent={style.text} />
-          <HudStat label="Very strong" value={tally?.veryStrong} accent={style.text} />
+          <HudStat label={detectionLabel('Very Strong')} value={tally?.veryStrong} accent={style.text} />
         </dl>
       </div>
     </section>

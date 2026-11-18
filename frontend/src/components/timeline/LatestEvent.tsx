@@ -2,6 +2,7 @@ import { Zap } from 'lucide-react'
 import type { StrikeEvent, StrikeType } from '../../types/dashboard'
 import { cx } from '../../utils/cx'
 import { formatClock, formatMeasure } from '../../utils/format'
+import { detectionLabel } from '../../utils/detectionLabel'
 import { CORNER_STYLES } from '../common/cornerStyles'
 
 const TYPE_TITLES: Record<StrikeType, string> = {
@@ -49,7 +50,7 @@ export function LatestEvent({ event }: { event: StrikeEvent | null }) {
               {formatClock(event.timeSeconds)}
             </p>
             <p className="mt-1.5 inline-block rounded bg-control px-2.5 py-1 text-[9px] leading-[11px] font-bold tracking-[0.6px] uppercase">
-              {event.detectionClass ?? 'Unscored'}
+              {detectionLabel(event.detectionClass)}
             </p>
           </div>
         </>

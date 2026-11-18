@@ -23,6 +23,21 @@ async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
   return readJson(status, body)
 }
 
+/** POST /analysis/start : analyse the sole MP4 in videos/input. */
+export async function startFolderAnalysis(signal?: AbortSignal): Promise<{ jobId: string }> {
+  const { status, body } = await send(`${API_PREFIX}/analysis/start`, JSON_TYPE, signal, {}, 'POST')
+  return normalizeUpload(readJson(status, body))
+}
+
+/** GET /analysis/current : restore the most recently started folder analysis. */
+export async function getCurrentJob(signal?: AbortSignal): Promise<string> {
+  const json = await getJson(`${API_PREFIX}/analysis/current`, signal)
+  if (!isRecord(json) || typeof json.job_id !== 'string') {
+    throw new Error('The backend returned an invalid current-analysis reference.')
+  }
+  return json.job_id
+}
+
 /** GET / : whether the backend is running. */
 export async function getHealth(signal?: AbortSignal): Promise<{ version: string | null }> {
   const json = await getJson(`${API_PREFIX}/`, signal)

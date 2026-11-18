@@ -9,7 +9,7 @@ const FINAL_ROWS: ReadonlyArray<readonly [string, keyof ScorecardRow]> = [
   ['Punch-like events', 'punchLike'],
   ['Kick-like events', 'kickLike'],
   ['Strong events', 'strong'],
-  ['Very Strong events', 'veryStrong'],
+  ['Significant events', 'veryStrong'],
 ]
 
 /** The unscored classes, from classified_strike_candidates.csv. */
@@ -45,7 +45,7 @@ export function ComparisonTable({ scorecard, unscored }: ComparisonTableProps) {
       <table className="w-full border-collapse text-left">
         <thead>
           <tr className="bg-panel-raised text-[9px] leading-[11px] tracking-[0.6px] uppercase">
-            <th className="px-7 py-2 font-semibold text-muted">Detected events</th>
+            <th className="px-7 py-2 font-semibold text-muted">Detected strikes</th>
             <th className="w-20 px-3 py-2 text-right font-semibold text-corner-blue">Blue</th>
             <th className="w-24 py-2 pr-7 pl-3 text-right font-semibold text-corner-red">Red</th>
           </tr>
